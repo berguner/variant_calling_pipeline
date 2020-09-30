@@ -1,0 +1,17 @@
+# The following section contains resource files required by the pipeline
+genome: "hg38"
+ref_fasta: "/scratch/lab_bsf/resources/GATK/hg38/v0/Homo_sapiens_assembly38.fasta"
+ref_fai: "/scratch/lab_bsf/resources/GATK/hg38/v0/Homo_sapiens_assembly38.fasta.fai"
+ref_dict: "/scratch/lab_bsf/resources/GATK/hg38/v0/Homo_sapiens_assembly38.dict"
+dbsnp_vcf: "/scratch/lab_bsf/resources/GATK/hg38/v0/dbsnp_146.hg38.vcf.gz"
+dbsnp_idx: "/scratch/lab_bsf/resources/GATK/hg38/v0/dbsnp_146.hg38.vcf.gz.tbi"
+
+gatk_jar: "/scratch/users/berguener/bin/gatk-4.1.8.1/gatk-package-4.1.8.1-local.jar"
+
+data_sources:
+  # specify the ABSOLUTE PATH of input files using variable path expressions
+  # entries correspond to values in the data_source column in sample_annotation table
+  # {variable} can be used to replace environment variables or other sample_annotation columns
+  # If you use {variable} codes, you should quote the field so python can parse it.
+  bsf: /scratch/lab_bsf/samples/{flowcell}/{flowcell}_{lane}_samples/{flowcell}_{lane}#{BSF_name}.bam
+  bsf_test: /scratch/users/berguener/junk/varcall_test/{raw_bam}

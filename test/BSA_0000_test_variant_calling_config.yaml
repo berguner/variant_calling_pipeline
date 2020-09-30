@@ -1,0 +1,5 @@
+project_name: "BSA_0000_test_variant_calling"
+project_path: "/scratch/users/berguener/junk/BSA_0000_test_variant_calling"
+sample_annotation: "/home/berguener/src/variant_calling_pipeline/test/BSA_0000_test_variant_calling_sample_annotations.csv"
+
+variant_calling_intervals_folder: "/data/groups/lab_bsf/resources/interval_lists/ensembl_exons_30parts/"

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """
 This script transfers the UMI tags in the read names to BAM tags.
@@ -6,37 +6,38 @@ This script transfers the UMI tags in the read names to BAM tags.
 Coder: Bekir Erguner, 2018
 """
 
-import pysam
 from argparse import ArgumentParser
-import os
+import sys
 
 
-parser = ArgumentParser(description='Add UMI to BAM')
-parser.add_argument('-b', '--bam-file', dest="b", help="Input BAM file which has UMI tags in read name",
-                    required=True, type=str)
-parser.add_argument('-o', '--output', dest="o", help="Output BAM file with UMI tags",
-                    required=True, type=str)
+parser = ArgumentParser(description='Move UMI tag in the read name to BAM tags, reads SAM from STDIN and writes to STDOUT')
+parser.add_argument('--barcode-tag', dest="bt", default="RX:Z:", help="UMI barcode tag",
+                    required=False, type=str)
+parser.add_argument('--quality-tag', dest="qt", default="QX:Z:", help="UMI quality tag",
+                    required=False, type=str)
 args = parser.parse_args()
 
-bam_file = pysam.AlignmentFile(args.b, "rb")
-out_bam = pysam.AlignmentFile(args.o, "wb", template=bam_file)
-count = 0
-for r in bam_file:
-    count += 1
-    if count % 100000 == 0:
-        print("{} reads processed".format(count))
-    readname = r.query_name.split(":")
-    for i in range(len(readname)):
-        if readname[i] == "RX" or readname[i] == "QX":
-            break
-        if i == len(readname) - 3:
-            print("No UMI tags were detected in the read name")
-            exit(1)
-    outname = ":".join(readname[:i])
-    r.query_name = outname.split("#")[0]
-    tag1 = (readname[i],readname[i+2])
-    tag2 = (readname[i+3],readname[i+5])
-    tmp_tags = r.get_tags()
-    tmp_tags.extend([tag1, tag2])
-    r.tags = tmp_tags
-    out_bam.write(r)
+line = sys.stdin.readline().rstrip("\n")
+while line:
+    if line[0] == '#':
+        sys.stdout.write(line + "\n")
+        line = sys.stdin.readline().rstrip("\n")
+        continue
+
+    line_arr = line.split("\t")
+    readname = line_arr[0]
+    new_readname = ''
+    bt_str = ''
+    qt_str = ''
+    if readname.find(args.bt) > -1 and readname.find(args.qt) > -1:
+        new_readname = readname[:readname.find(args.bt)]
+        bt_str = readname[readname.find(args.bt):readname.find(args.qt)]
+        qt_str = readname[readname.find(args.qt):]
+        line_arr.append(bt_str)
+        line_arr.append(qt_str)
+        line_arr[0] = new_readname
+        sys.stdout.write("\t".join(line_arr) + "\n")
+    else:
+        sys.stdout.write(line + "\n")
+
+    line = sys.stdin.readline().rstrip("\n")
