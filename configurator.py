@@ -35,7 +35,7 @@ if __name__ == '__main__':
                         type=str)
     args = parser.parse_args()
 
-    # Read in config files
+    # Read config files
     # default will contain pipeline configurations
     default = {}
     # specific will contain the project configurations
@@ -51,10 +51,10 @@ if __name__ == '__main__':
         except yaml.YAMLError as exception:
             sys.stderr.write(str(exception))
     update(default, specific)
-    # rename the updated dictionary
+    # Rename the updated dictionary
     config = default
 
-    # Create the
+    # Create the output folders
     project_path = config['project_path']
     output_path = os.path.join(project_path, config['genome'])
     json_path = os.path.join(project_path, 'config_files')
@@ -65,23 +65,22 @@ if __name__ == '__main__':
     if not os.path.exists(json_path):
         os.mkdir(json_path)
 
+    # Parse necessary configurations
     project_genome = config['genome']
     inputs_dict = {'variant_calling.project_name': config['project_name'],
                    'variant_calling.project_path': config['project_path'],
-                   'variant_calling.genome': project_genome,
-                   'variant_calling.variant_calling_intervals': config['variant_calling_intervals'],
-                   'variant_calling.interval_padding': config['interval_padding'],
-                   'variant_calling.ref_fasta': config['ref_fasta'],
-                   'variant_calling.ref_fai': config['ref_fai'],
-                   'variant_calling.ref_dict': config['ref_dict'],
-                   'variant_calling.dbsnp_vcf': config['dbsnp_vcf'],
-                   'variant_calling.dbsnp_idx': config['dbsnp_idx'],
-                   'variant_calling.gatk_jar': config['gatk_jar']
+                   'variant_calling.genome': project_genome
                    }
-    if 'adapter_sequence' in config:
-        inputs_dict['variant_calling.adapter_sequence'] = config['adapter_sequence']
+
+    # Collect direct configurations for WDL tasks
+    for key in config['bypass_parser']:
+        inputs_dict[key] = config['bypass_parser'][key]
+
+    # Parse sample specific configurations
     sas_file = config['sample_annotation']
     sas_dict = {}
+    germline_samples = []
+    tumor_samples = []
     with open(sas_file, 'r') as sas:
         reader = csv.DictReader(sas, dialect='excel')
         for row in reader:
@@ -90,13 +89,24 @@ if __name__ == '__main__':
                     sas_dict[row['sample_name']].append(row)
                 else:
                     sas_dict[row['sample_name']] = [row]
+                    if row['sample_type'] == 'germline':
+                        germline_samples.append(row['sample_name'])
+                    if row['sample_type'] == 'tumor':
+                        tumor_samples.append(row['sample_name'])
 
+    # WDL workflow will iterate over these samples
     inputs_dict['variant_calling.sample_list'] = list(sas_dict.keys())
+    if len(germline_samples) > 0:
+        inputs_dict['variant_calling.germline_samples'] = germline_samples
+    if len(tumor_samples) > 0:
+        inputs_dict['variant_calling.tumor_samples'] = tumor_samples
 
+    # Dump the inputs.json file
     project_json = os.path.join(json_path, '{}.inputs.json'.format(config['project_name']))
     with open(project_json, 'w') as output:
         json.dump(inputs_dict, output, indent=2)
 
+    # Read sample details
     sample_dicts = []
     for sample in sas_dict:
         sample_dict = {'sample_name': sample,
@@ -109,6 +119,7 @@ if __name__ == '__main__':
         number_of_rows = len(row_list)
         bam_sources = []
         raw_size_mb = 0
+        # Collect the list of raw data input files for each sample
         for i in range(number_of_rows):
             if 'data_source' in row_list[i] and row_list[i]['data_source'] != '':
                 source_template = config['data_sources'][row_list[i]['data_source']]
@@ -119,10 +130,12 @@ if __name__ == '__main__':
                         source_stats = os.stat(source)
                         raw_size_mb += int(source_stats.st_size / (1024 * 1024))
                 else:
-                    print('WARNING: Could not locate {}'.format(source))
+                    print('WARNING: Could not locate {} for sample {}'.format(source))
+        # Skip the sample in case the input files weren't located
         if len(bam_sources) == 0:
             print('WARNING: Could not locate any raw data files for sample {}, skipping.'.format(sample))
         else:
+            print('Sample {} has {} data sources, total size is {}MB'.format(sample, len(bam_sources), raw_size_mb))
             sample_dict['raw_bams'] = ' '.join(bam_sources)
             sample_dict['raw_size_mb'] = raw_size_mb
             sample_tsv = os.path.join(json_path, '{}.tsv'.format(sample))

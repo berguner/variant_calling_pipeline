@@ -12,7 +12,14 @@ struct Sample {
 task bwa_align_ubam {
     input {
         String output_dir
-        String ref_fasta
+        File ref_fasta
+        File ref_fai
+        File? ref_alt
+        File ref_amb
+        File ref_ann
+        File ref_bwt
+        File ref_pac
+        File ref_sa
         String? gatk_jar
         Sample sample
 
@@ -86,7 +93,8 @@ task collect_wes_metrics {
     input{
         String output_dir
         Sample sample
-        String ref_fasta
+        File ref_fasta
+        File ref_fai
         String? gatk_jar
 
         # runtime parameters
@@ -154,9 +162,10 @@ task generate_sample_gvcf {
     input {
         String output_dir
         Sample sample
-        String ref_fasta
-        String ref_dict
-        String calling_intervals
+        File ref_fasta
+        File ref_fai
+        File ref_dict
+        File calling_intervals
         Int? interval_padding
         String? gatk_jar
 
@@ -175,9 +184,10 @@ task generate_sample_gvcf {
 
     command <<<
         [ ! -d "~{parent_dir}" ] && mkdir -p ~{parent_dir};
-        [ ! -d "~{gvcf_dir}" ] && mkdir -p ~{gvcf_dir};
 
-        if [ ! -f "~{output_dir}/~{sample.sample_name}.g.vcf.gz" ]; then
+        if [ ! -f "~{parent_dir}/~{sample.sample_name}.g.vcf.gz" ]; then
+            [ ! -d "~{gvcf_dir}" ] && mkdir -p ~{gvcf_dir};
+
             gatk --java-options "-Djava.io.tmpdir=~{gvcf_dir} -Xmx1g" \
                 SplitIntervals -R ~{ref_fasta} \
                 -L ~{calling_intervals} \
@@ -213,7 +223,7 @@ task generate_sample_gvcf {
                 > ~{parent_dir}/~{sample.sample_name}.MergeVcfs.log 2>&1;
 
             if [ $? -eq "0" ]; then
-                rm ~{gvcf_dir}/*.g.vcf.gz ~{gvcf_dir}/*.interval_list;
+                rm -r ~{gvcf_dir};
             fi
         fi
     >>>
@@ -227,25 +237,150 @@ task generate_sample_gvcf {
     }
 
     output {
-        File output_gvcf = "~{parent_dir}/~{sample.sample_name}.g.vcf.gz"
-        File output_gvcf_tbi = "~{parent_dir}/~{sample.sample_name}.g.vcf.gz.tbi"
-        Sample gvcf_sample = sample
+        String output_gvcf = "~{parent_dir}/~{sample.sample_name}.g.vcf.gz"
+        String output_gvcf_tbi = "~{parent_dir}/~{sample.sample_name}.g.vcf.gz.tbi"
     }
 }
+
+task split_intervals {
+    input {
+        File intervals
+        File ref_fasta
+        File ref_fai
+        File ref_dict
+        Int scatter_count
+        String? split_intervals_extra_args
+        String? gatk_jar
+
+        # runtime parameters
+        Int cpus = 1
+        Int memory = 4000
+        String partition = "shortq"
+        String time = "1:00:00"
+        String rt_additional_parameters = ""
+    }
+
+    command {
+        set -e
+        export GATK_LOCAL_JAR=~{default="/root/gatk.jar" gatk_jar}
+
+        mkdir interval-files
+        gatk --java-options "-Xmx2g" SplitIntervals \
+        -R ~{ref_fasta} \
+        -L ~{intervals} \
+        -scatter ~{scatter_count} \
+        -O interval-files
+        cp interval-files/*.interval_list .
+    }
+
+    runtime {
+        rt_cpus: cpus
+        rt_mem: memory
+        rt_queue: partition
+        rt_time: time
+        rt_additional_parameters: rt_additional_parameters
+    }
+
+    output {
+        Array[File] interval_files = glob("*.interval_list")
+    }
+}
+
+task combine_genotype_gvcfs {
+    input {
+        String output_dir
+        File interval_file
+        Int? interval_padding
+        File ref_fasta
+        File ref_fai
+        File ref_dict
+        Array[String?] input_gvcfs
+        #Array[File?] input_gvcf_tbis
+        File dbsnp_vcf
+        File dbsnp_idx
+        String? gatk_jar
+
+        # runtime parameters
+        Int cpus = 4
+        Int memory = 16000
+        String partition = "mediumq"
+        String time = "2-00:00:00"
+        String rt_additional_parameters = ""
+    }
+    # output_dir should be /project_path/genome/
+    String combined_gvcf_dir = "~{output_dir}/gvcf/combined_gvcf"
+    String BN = basename("~{interval_file}")
+    String interval_name = sub(BN, "\\.interval_list$", "")
+    String gvcf_files = "~{input_gvcfs}"
+    command <<<
+        [ ! -d "~{combined_gvcf_dir}" ] && mkdir -p ~{combined_gvcf_dir};
+
+        set -e
+        export GATK_LOCAL_JAR=~{default="/root/gatk.jar" gatk_jar}
+        VAR_FILES=`echo "~{gvcf_files}" |  tr '[' ' ' | tr ']' ' ' | sed 's/, / -V /g'`
+        gatk --java-options "-Xmx12g -Xms128m -Djava.io.tmpdir:~{combined_gvcf_dir} -d64" \
+            CombineGVCFs \
+            -L ~{interval_file} \
+            ~{"--interval-padding " + interval_padding } \
+            -O "~{combined_gvcf_dir}/~{interval_name}.g.vcf.gz"  \
+            -R ~{ref_fasta} \
+            --sequence-dictionary ~{ref_dict} \
+            -V $VAR_FILES > "~{combined_gvcf_dir}/~{interval_name}.g.vcf.gz.log" 2>&1
+
+        gatk --java-options "-Xmx12g -Xms128m -Djava.io.tmpdir:~{combined_gvcf_dir} -d64" \
+            GenotypeGVCFs \
+            --dbsnp ~{dbsnp_vcf} \
+            -L ~{interval_file} \
+            ~{"--interval-padding " + interval_padding } \
+            -O "~{combined_gvcf_dir}/~{interval_name}.vcf.gz" \
+            -R ~{ref_fasta} \
+            --sequence-dictionary ~{ref_dict} \
+            -V "~{combined_gvcf_dir}/~{interval_name}.g.vcf.gz" > "~{combined_gvcf_dir}/~{interval_name}.vcf.gz.log" 2>&1
+
+        if [ $? -eq "0" ]; then
+            rm "~{combined_gvcf_dir}/~{interval_name}.g.vcf.gz" "~{combined_gvcf_dir}/~{interval_name}.g.vcf.gz.tbi"
+        fi
+
+    >>>
+
+    runtime {
+        rt_cpus: cpus
+        rt_mem: memory
+        rt_queue: partition
+        rt_time: time
+        rt_additional_parameters: rt_additional_parameters
+    }
+
+    output {
+        File genotyped_vcf = "~{combined_gvcf_dir}/~{interval_name}.vcf.gz"
+        File genotyped_vcf_tbi = "~{combined_gvcf_dir}/~{interval_name}.vcf.gz.tbi"
+    }
+}
+
 workflow variant_calling {
     input {
         String project_name
         String project_path
-        String variant_calling_intervals
+        File variant_calling_intervals
         Int? interval_padding
-        String ref_fasta
-        String ref_fai
+        File ref_fasta
+        File ref_fai
+        File? ref_alt
+        File ref_amb
+        File ref_ann
+        File ref_bwt
+        File ref_pac
+        File ref_sa
         String genome
-        String ref_dict
-        String dbsnp_vcf
-        String dbsnp_idx
+        File ref_dict
+        File dbsnp_vcf
+        File dbsnp_idx
         String? gatk_jar
         Array[String] sample_list
+        Array[String]? germline_samples
+        Array[String]? tumor_samples
+        Int genotype_scatter_count = 10
+        String? split_intervals_extra_args
     }
 
     String output_dir = "~{project_path}/~{genome}"
@@ -265,6 +400,13 @@ workflow variant_calling {
             input:
                 sample = sample,
                 ref_fasta = ref_fasta,
+                ref_fai = ref_fai,
+                ref_alt = ref_alt,
+                ref_amb = ref_amb,
+                ref_ann = ref_ann,
+                ref_bwt = ref_bwt,
+                ref_pac = ref_pac,
+                ref_sa = ref_sa,
                 output_dir = output_dir,
                 gatk_jar = gatk_jar
         }
@@ -275,6 +417,7 @@ workflow variant_calling {
             input:
                 sample = sample,
                 ref_fasta = ref_fasta,
+                ref_fai = ref_fai,
                 output_dir = bam_dir,
                 gatk_jar = gatk_jar
         }
@@ -286,6 +429,7 @@ workflow variant_calling {
                 input:
                     sample = sample,
                     ref_fasta = ref_fasta,
+                    ref_fai = ref_fai,
                     ref_dict = ref_dict,
                     calling_intervals = variant_calling_intervals,
                     interval_padding = interval_padding,
@@ -295,4 +439,34 @@ workflow variant_calling {
         }
     }
 
+    call split_intervals {
+        input:
+            scatter_count = genotype_scatter_count,
+            ref_fasta = ref_fasta,
+            ref_fai = ref_fai,
+            ref_dict = ref_dict,
+            intervals = variant_calling_intervals,
+            gatk_jar = gatk_jar,
+            split_intervals_extra_args = split_intervals_extra_args
+    }
+
+    if(length(generate_sample_gvcf.output_gvcf) > 0) {
+        Array[String?] my_gvcfs = generate_sample_gvcf.output_gvcf
+        scatter(interval_file in split_intervals.interval_files) {
+            call combine_genotype_gvcfs {
+                input:
+                    interval_file = interval_file,
+                    ref_fasta = ref_fasta,
+                    ref_fai = ref_fai,
+                    ref_dict = ref_dict,
+                    interval_padding = interval_padding,
+                    dbsnp_vcf = dbsnp_vcf,
+                    dbsnp_idx = dbsnp_idx,
+                    gatk_jar = gatk_jar,
+                    output_dir = output_dir,
+                    input_gvcfs = my_gvcfs
+                    #input_gvcf_tbis = generate_sample_gvcf.output_gvcf_tbi
+            }
+        }
+    }
 }
