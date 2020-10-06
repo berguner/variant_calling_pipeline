@@ -295,7 +295,6 @@ task combine_genotype_gvcfs {
         File ref_fai
         File ref_dict
         Array[String?] input_gvcfs
-        #Array[File?] input_gvcf_tbis
         File dbsnp_vcf
         File dbsnp_idx
         String? gatk_jar
@@ -307,17 +306,24 @@ task combine_genotype_gvcfs {
         String time = "2-00:00:00"
         String rt_additional_parameters = ""
     }
+
     # output_dir should be /project_path/genome/
     String combined_gvcf_dir = "~{output_dir}/gvcf/combined_gvcf"
     String BN = basename("~{interval_file}")
     String interval_name = sub(BN, "\\.interval_list$", "")
     String gvcf_files = "~{input_gvcfs}"
+
     command <<<
         [ ! -d "~{combined_gvcf_dir}" ] && mkdir -p ~{combined_gvcf_dir};
 
         set -e
         export GATK_LOCAL_JAR=~{default="/root/gatk.jar" gatk_jar}
+
+        ### This is a temporary solution to avaoid the cromwell error:
+        ### cannot interpolate Array[File?] into a command string with attribute set
         VAR_FILES=`echo "~{gvcf_files}" |  tr '[' ' ' | tr ']' ' ' | sed 's/, / -V /g'`
+        ###
+
         gatk --java-options "-Xmx12g -Xms128m -Djava.io.tmpdir:~{combined_gvcf_dir} -d64" \
             CombineGVCFs \
             -L ~{interval_file} \
@@ -337,10 +343,6 @@ task combine_genotype_gvcfs {
             --sequence-dictionary ~{ref_dict} \
             -V "~{combined_gvcf_dir}/~{interval_name}.g.vcf.gz" > "~{combined_gvcf_dir}/~{interval_name}.vcf.gz.log" 2>&1
 
-        if [ $? -eq "0" ]; then
-            rm "~{combined_gvcf_dir}/~{interval_name}.g.vcf.gz" "~{combined_gvcf_dir}/~{interval_name}.g.vcf.gz.tbi"
-        fi
-
     >>>
 
     runtime {
@@ -354,8 +356,105 @@ task combine_genotype_gvcfs {
     output {
         File genotyped_vcf = "~{combined_gvcf_dir}/~{interval_name}.vcf.gz"
         File genotyped_vcf_tbi = "~{combined_gvcf_dir}/~{interval_name}.vcf.gz.tbi"
+        File combined_gvcf = "~{combined_gvcf_dir}/~{interval_name}.g.vcf.gz"
+        File combined_gvcf_tbi = "~{combined_gvcf_dir}/~{interval_name}.g.vcf.gz.tbi"
     }
 }
+
+task merge_combined_gvcfs {
+    # This task will merge the scattered combined (multisample) gvcf and vcf files to create cohort level gvcf and vcf files
+    input {
+        String output_dir
+        String project_name
+        File ref_dict
+        Array[File]? input_gvcfs
+        Array[File]? input_gvcf_tbis
+        Array[File]? input_vcfs
+        Array[File]? input_vcf_tbis
+        String? gatk_jar
+
+        # runtime parameters
+        Int cpus = 2
+        Int memory = 8000
+        String partition = "mediumq"
+        String time = "2-00:00:00"
+        String rt_additional_parameters = ""
+    }
+
+    # output_dir should be /project_path/genome/
+    String cohort_gvcf_dir = "~{output_dir}/gvcf"
+    String cohort_vcf_dir = "~{output_dir}/vcf"
+    String cohort_gvcf = "~{cohort_gvcf_dir}/~{project_name}_cohort.g.vcf.gz"
+    String cohort_vcf = "~{cohort_vcf_dir}/~{project_name}_cohort.vcf.gz"
+
+    command <<<
+        # Creat necessary folders
+        [ ! -d "~{cohort_gvcf_dir}" ] && mkdir -p ~{cohort_gvcf_dir};
+        [ ! -d "~{cohort_vcf_dir}" ] && mkdir -p ~{cohort_vcf_dir};
+
+        set -e
+        export GATK_LOCAL_JAR=~{default="/root/gatk.jar" gatk_jar}
+        # Rename the existing cohort files
+        if [ -f "~{cohort_gvcf}" ]; then
+            mv "~{cohort_gvcf}" "~{cohort_gvcf}.old";
+            mv "~{cohort_gvcf}.tbi" "~{cohort_gvcf}.tbi.old";
+        fi
+
+        if [ -f "~{cohort_vcf}" ]; then
+            mv "~{cohort_vcf}" "~{cohort_vcf}.old";
+            mv "~{cohort_vcf}.tbi" "~{cohort_vcf}.tbi.old";
+        fi
+
+        # Merge the scattered gvcf files
+        gatk --java-options "-Djava.io.tmpdir=~{cohort_gvcf_dir} -Xmx8g" \
+                MergeVcfs \
+                -D ~{ref_dict} \
+                -I ~{sep=' -I ' input_gvcfs} \
+                -O ~{cohort_gvcf} \
+                > ~{cohort_gvcf}.MergeVcfs.log 2>&1;
+
+        # Remove the old cohort gvcf file and scattered gvcf files
+        if [ $? -eq "0" ]; then
+            if [ -f "~{cohort_gvcf}.old" ]; then
+                rm "~{cohort_gvcf}.old" "~{cohort_gvcf}.tbi.old";
+            fi
+            rm ~{cohort_gvcf_dir}/combined_gvcfs/*.g.vcf.gz ~{cohort_gvcf_dir}/combined_gvcfs/*.g.vcf.gz.tbi;
+        fi
+
+        # Merge the scattered vcf files
+        gatk --java-options "-Djava.io.tmpdir=~{cohort_vcf_dir} -Xmx8g" \
+                MergeVcfs \
+                -D ~{ref_dict} \
+                -I ~{sep=' -I ' input_vcfs} \
+                -O ~{cohort_vcf} \
+                > ~{cohort_vcf}.MergeVcfs.log 2>&1;
+
+        # Remove the old cohort vcf file and scattered vcf files
+        if [ $? -eq "0" ]; then
+            if [ -f "~{cohort_vcf}.old" ]; then
+                rm "~{cohort_vcf}.old" "~{cohort_vcf}.tbi.old";
+            fi
+            rm ~{cohort_gvcf_dir}/combined_gvcfs/*.vcf.gz ~{cohort_gvcf_dir}/combined_gvcfs/*.vcf.gz.tbi;
+        fi
+
+    >>>
+
+    runtime {
+        rt_cpus: cpus
+        rt_mem: memory
+        rt_queue: partition
+        rt_time: time
+        rt_additional_parameters: rt_additional_parameters
+    }
+
+    output {
+        File cohort_gvcf = "~{output_dir}/gvcf/~{project_name}_cohort.g.vcf.gz"
+        File cohort_gvcf_tbi = "~{output_dir}/gvcf/~{project_name}_cohort.g.vcf.gz.tbi"
+        File cohort_vcf = "~{output_dir}/vcf/~{project_name}_cohort.vcf.gz"
+        File cohort_vcf_tbi = "~{output_dir}/vcf/~{project_name}_cohort.vcf.gz.tbi"
+    }
+}
+
 
 workflow variant_calling {
     input {
@@ -465,8 +564,19 @@ workflow variant_calling {
                     gatk_jar = gatk_jar,
                     output_dir = output_dir,
                     input_gvcfs = my_gvcfs
-                    #input_gvcf_tbis = generate_sample_gvcf.output_gvcf_tbi
             }
         }
+    }
+
+    call merge_combined_gvcfs {
+        input:
+            output_dir = output_dir,
+            project_name = project_name,
+            ref_dict = ref_dict,
+            gatk_jar = gatk_jar,
+            input_gvcfs = combine_genotype_gvcfs.combined_gvcf,
+            input_gvcf_tbis = combine_genotype_gvcfs.combined_gvcf_tbi,
+            input_vcfs = combine_genotype_gvcfs.genotyped_vcf,
+            input_vcf_tbis = combine_genotype_gvcfs.genotyped_vcf_tbi
     }
 }
