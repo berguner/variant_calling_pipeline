@@ -406,7 +406,7 @@ task merge_combined_gvcfs {
         fi
 
         # Merge the scattered gvcf files
-        gatk --java-options "-Djava.io.tmpdir=~{cohort_gvcf_dir} -Xmx8g" \
+        gatk --java-options "-Djava.io.tmpdir=~{cohort_gvcf_dir} -Xmx6g" \
                 MergeVcfs \
                 -D ~{ref_dict} \
                 -I ~{sep=' -I ' input_gvcfs} \
@@ -418,11 +418,12 @@ task merge_combined_gvcfs {
             if [ -f "~{cohort_gvcf}.old" ]; then
                 rm "~{cohort_gvcf}.old" "~{cohort_gvcf}.tbi.old";
             fi
-            rm ~{cohort_gvcf_dir}/combined_gvcfs/*.g.vcf.gz ~{cohort_gvcf_dir}/combined_gvcfs/*.g.vcf.gz.tbi;
+            for i in ~{sep=' ' input_gvcfs}; do rm $(readlink -f $i); done;
+            for i in ~{sep=' ' input_gvcf_tbis}; do rm $(readlink -f $i); done;
         fi
 
         # Merge the scattered vcf files
-        gatk --java-options "-Djava.io.tmpdir=~{cohort_vcf_dir} -Xmx8g" \
+        gatk --java-options "-Djava.io.tmpdir=~{cohort_vcf_dir} -Xmx6g" \
                 MergeVcfs \
                 -D ~{ref_dict} \
                 -I ~{sep=' -I ' input_vcfs} \
@@ -434,7 +435,8 @@ task merge_combined_gvcfs {
             if [ -f "~{cohort_vcf}.old" ]; then
                 rm "~{cohort_vcf}.old" "~{cohort_vcf}.tbi.old";
             fi
-            rm ~{cohort_gvcf_dir}/combined_gvcfs/*.vcf.gz ~{cohort_gvcf_dir}/combined_gvcfs/*.vcf.gz.tbi;
+            for i in ~{sep=' ' input_vcfs}; do rm $(readlink -f $i); done;
+            for i in ~{sep=' ' input_vcf_tbis}; do rm $(readlink -f $i); done;
         fi
 
     >>>
@@ -455,6 +457,121 @@ task merge_combined_gvcfs {
     }
 }
 
+task annotate_vcf_vep {
+    input {
+        String vep_executable
+        String dir_cache
+        String dir_plugins
+        String CADD_SNVs
+        String CADD_indels
+        String fasta
+        String assembly
+        String output_vcf_dir
+        File input_vcf
+        File input_vcf_tbi
+
+        # runtime parameters
+        Int cpus = 16
+        Int memory = 32000
+        String partition = "mediumq"
+        String time = "2-00:00:00"
+        String rt_additional_parameters = ""
+    }
+
+    String input_basename = basename("~{input_vcf}")
+    String output_prefix = sub(input_basename, "\\.vcf.gz$", "")
+
+    command {
+
+        ~{vep_executable} \
+            --allele_number --allow_non_variant \
+            --assembly ~{assembly} \
+            --cache --dir_cache ~{dir_cache} --offline \
+            --dir_plugins ~{dir_plugins} \
+            --dont_skip --everything --failed 1 \
+            --fasta ~{fasta} \
+            --flag_pick_allele_gene --force_overwrite --format vcf \
+            --gencode_basic --hgvsg --exclude_predicted \
+            --plugin CADD,~{CADD_SNVs},~{CADD_indels} \
+            --species homo_sapiens --merged \
+            --tmpdir ~{output_vcf_dir} \
+            --vcf --compress_output bgzip --fork ~{cpus} \
+            --input_file ~{input_vcf} \
+            --output_file ~{output_vcf_dir}/~{output_prefix}.vep.vcf.gz \
+            --stats_file ~{output_vcf_dir}/~{output_prefix}.vep.html \
+            --warning_file ~{output_vcf_dir}/~{output_prefix}.vep.warning.txt;
+
+        tabix ~{output_vcf_dir}/~{output_prefix}.vep.vcf.gz;
+    }
+
+    runtime {
+        rt_cpus: cpus
+        rt_mem: memory
+        rt_queue: partition
+        rt_time: time
+        rt_additional_parameters: rt_additional_parameters
+    }
+
+    output {
+        File annotated_vcf = "~{output_vcf_dir}/~{output_prefix}.vep.vcf.gz"
+        File annotated_vcf_tbi = "~{output_vcf_dir}/~{output_prefix}.vep.vcf.gz.tbi"
+    }
+}
+
+task generate_sample_vcfs {
+    input {
+        File input_vcf
+        File input_vcf_tbi
+        File dbsnp_vcf
+        File dbsnp_vcf_tbi
+        String output_vcf_dir
+        String? gatk_jar
+
+        # runtime parameters
+        Int cpus = 16
+        Int memory = 32000
+        String partition = "shortq"
+        String time = "1:00:00"
+        String rt_additional_parameters = ""
+    }
+
+    command <<<
+        set -e
+        export GATK_LOCAL_JAR=~{default="/root/gatk.jar" gatk_jar}
+
+        SAMPLE_LIST=`bcftools query -l ~{input_vcf}`
+        for sample in ${SAMPLE_LIST};
+        do
+            echo -e "bcftools view -Oz -o ~{output_vcf_dir}/${sample}.vcf.gz -s ${sample} ~{input_vcf}"
+        done | parallel --no-notice -j ~{cpus} :::
+
+        for sample in ${SAMPLE_LIST};
+        do
+            echo -e "bcftools index -t ~{output_vcf_dir}/${sample}.vcf.gz"
+        done | parallel --no-notice -j ~{cpus} :::
+
+        for sample in ${SAMPLE_LIST};
+        do
+            echo -e "gatk --java-options \"-Xmx1g -Xms128m -Djava.io.tmpdir:~{output_vcf_dir} -d64\" \
+                CollectVariantCallingMetrics \
+                --INPUT ~{output_vcf_dir}/${sample}.vcf.gz \
+                --OUTPUT ~{output_vcf_dir}/${sample} \
+                --DBSNP ~{dbsnp_vcf} > ~{output_vcf_dir}/${sample}.CollectVariantCallingMetrics.log 2>&1"
+        done | parallel --no-notice -j ~{cpus} :::
+    >>>
+
+    runtime {
+        rt_cpus: cpus
+        rt_mem: memory
+        rt_queue: partition
+        rt_time: time
+        rt_additional_parameters: rt_additional_parameters
+    }
+
+    output {
+        Array[File] all_vcf_files = glob("~{output_vcf_dir}/*.vcf.gz")
+    }
+}
 
 workflow variant_calling {
     input {
@@ -480,6 +597,9 @@ workflow variant_calling {
         Array[String]? tumor_samples
         Int genotype_scatter_count = 10
         String? split_intervals_extra_args
+        String perform_germline_variant_calling = "no"
+        String generate_germline_sample_vcfs = "no"
+
     }
 
     String output_dir = "~{project_path}/~{genome}"
@@ -522,61 +642,83 @@ workflow variant_calling {
         }
     }
 
-    scatter(sample in bwa_align_ubam.processed_sample) {
-        if(sample.sample_type == "germline") {
-            call generate_sample_gvcf {
+    if(perform_germline_variant_calling == "yes") {
+        scatter(sample in bwa_align_ubam.processed_sample) {
+            if(sample.sample_type == "germline") {
+                call generate_sample_gvcf {
+                    input:
+                        sample = sample,
+                        ref_fasta = ref_fasta,
+                        ref_fai = ref_fai,
+                        ref_dict = ref_dict,
+                        calling_intervals = variant_calling_intervals,
+                        interval_padding = interval_padding,
+                        output_dir = output_dir,
+                        gatk_jar = gatk_jar
+                }
+            }
+        }
+
+        call split_intervals {
+            input:
+                scatter_count = genotype_scatter_count,
+                ref_fasta = ref_fasta,
+                ref_fai = ref_fai,
+                ref_dict = ref_dict,
+                intervals = variant_calling_intervals,
+                gatk_jar = gatk_jar,
+                split_intervals_extra_args = split_intervals_extra_args
+        }
+
+        if(length(generate_sample_gvcf.output_gvcf) > 0) {
+            Array[String?] my_gvcfs = generate_sample_gvcf.output_gvcf
+            scatter(interval_file in split_intervals.interval_files) {
+                call combine_genotype_gvcfs {
+                    input:
+                        interval_file = interval_file,
+                        ref_fasta = ref_fasta,
+                        ref_fai = ref_fai,
+                        ref_dict = ref_dict,
+                        interval_padding = interval_padding,
+                        dbsnp_vcf = dbsnp_vcf,
+                        dbsnp_idx = dbsnp_idx,
+                        gatk_jar = gatk_jar,
+                        output_dir = output_dir,
+                        input_gvcfs = my_gvcfs
+                }
+            }
+        }
+
+        call merge_combined_gvcfs {
+            input:
+                output_dir = output_dir,
+                project_name = project_name,
+                ref_dict = ref_dict,
+                gatk_jar = gatk_jar,
+                input_gvcfs = combine_genotype_gvcfs.combined_gvcf,
+                input_gvcf_tbis = combine_genotype_gvcfs.combined_gvcf_tbi,
+                input_vcfs = combine_genotype_gvcfs.genotyped_vcf,
+                input_vcf_tbis = combine_genotype_gvcfs.genotyped_vcf_tbi
+        }
+
+        String output_vcf_dir = "~{output_dir}/vcf"
+        call annotate_vcf_vep {
+            input:
+                output_vcf_dir = output_vcf_dir,
+                input_vcf = merge_combined_gvcfs.cohort_vcf,
+                input_vcf_tbi = merge_combined_gvcfs.cohort_vcf_tbi
+        }
+
+        if(generate_germline_sample_vcfs == "yes") {
+            call generate_sample_vcfs {
                 input:
-                    sample = sample,
-                    ref_fasta = ref_fasta,
-                    ref_fai = ref_fai,
-                    ref_dict = ref_dict,
-                    calling_intervals = variant_calling_intervals,
-                    interval_padding = interval_padding,
-                    output_dir = output_dir,
+                    output_vcf_dir = output_vcf_dir,
+                    input_vcf = annotate_vcf_vep.annotated_vcf,
+                    input_vcf_tbi = annotate_vcf_vep.annotated_vcf_tbi,
+                    dbsnp_vcf = dbsnp_vcf,
+                    dbsnp_vcf_tbi = dbsnp_idx,
                     gatk_jar = gatk_jar
             }
         }
-    }
-
-    call split_intervals {
-        input:
-            scatter_count = genotype_scatter_count,
-            ref_fasta = ref_fasta,
-            ref_fai = ref_fai,
-            ref_dict = ref_dict,
-            intervals = variant_calling_intervals,
-            gatk_jar = gatk_jar,
-            split_intervals_extra_args = split_intervals_extra_args
-    }
-
-    if(length(generate_sample_gvcf.output_gvcf) > 0) {
-        Array[String?] my_gvcfs = generate_sample_gvcf.output_gvcf
-        scatter(interval_file in split_intervals.interval_files) {
-            call combine_genotype_gvcfs {
-                input:
-                    interval_file = interval_file,
-                    ref_fasta = ref_fasta,
-                    ref_fai = ref_fai,
-                    ref_dict = ref_dict,
-                    interval_padding = interval_padding,
-                    dbsnp_vcf = dbsnp_vcf,
-                    dbsnp_idx = dbsnp_idx,
-                    gatk_jar = gatk_jar,
-                    output_dir = output_dir,
-                    input_gvcfs = my_gvcfs
-            }
-        }
-    }
-
-    call merge_combined_gvcfs {
-        input:
-            output_dir = output_dir,
-            project_name = project_name,
-            ref_dict = ref_dict,
-            gatk_jar = gatk_jar,
-            input_gvcfs = combine_genotype_gvcfs.combined_gvcf,
-            input_gvcf_tbis = combine_genotype_gvcfs.combined_gvcf_tbi,
-            input_vcfs = combine_genotype_gvcfs.genotyped_vcf,
-            input_vcf_tbis = combine_genotype_gvcfs.genotyped_vcf_tbi
     }
 }

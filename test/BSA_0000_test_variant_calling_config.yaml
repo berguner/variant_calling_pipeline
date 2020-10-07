@@ -8,3 +8,5 @@ bypass_parser:
   variant_calling.variant_calling_intervals: "/data/groups/lab_bsf/resources/interval_lists/Ensembl_Exons_hg38_e99_chromosomal.interval_list"
   variant_calling.interval_padding: 50
   variant_calling.genotype_scatter_count: 4
+  variant_calling.perform_germline_variant_calling: "yes"
+  variant_calling.generate_germline_sample_vcfs: "yes"
