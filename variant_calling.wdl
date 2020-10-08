@@ -22,6 +22,7 @@ task bwa_align_ubam {
         File ref_sa
         String? gatk_jar
         Sample sample
+        String genome_version
 
         # runtime parameters
         Int cpus = 8
@@ -31,7 +32,7 @@ task bwa_align_ubam {
         String rt_additional_parameters = ""
     }
 
-    # bam_dir would be /project_path/genome/bam
+    # bam_dir would be /project_path/genome_version/bam
     String bam_dir = "~{output_dir}/bam"
     String raw_bams = sample.raw_bams
     # Read group ID and various info which is needed for GATK tools, BWA adds it to the aligned bam
@@ -71,6 +72,32 @@ task bwa_align_ubam {
                     mv "~{bam_dir}/~{sample.sample_name}.bai" "~{bam_dir}/~{sample.sample_name}.bam.bai";
                 fi
             fi
+        fi
+
+        # Infer sex
+        BAM="~{bam_dir}/~{sample.sample_name}.bam"
+        REF=~{genome_version}
+        SEX_FILE="~{bam_dir}/~{sample.sample_name}.sex"
+
+        if [ $REF == "hg38" ]; then
+            REG="chrY:2786847-2787698";
+        elif [ $REF == "b37" ]; then
+            REG="Y:2654887-2655798";
+        elif [ $REF == "hg19" ]; then
+            REG="chrY:2654887-2655798";
+        else
+            echo "Invalid genome";
+        fi
+
+        SAMERR=$((samtools view -c ${BAM} ${REG}) 2>&1 )
+        SRY=`samtools view -c ${BAM} ${REG}`;
+
+        if [[ "$SAMERR" == *"main"* ]];then
+            echo "Invalid region"
+        elif [ $SRY -gt 10 ]; then
+            echo "~{sample.sample_name}: MALE" > $SEX_FILE;
+        else
+            echo "~{sample.sample_name}: FEMALE" > $SEX_FILE;
         fi
     >>>
 
@@ -307,7 +334,7 @@ task combine_genotype_gvcfs {
         String rt_additional_parameters = ""
     }
 
-    # output_dir should be /project_path/genome/
+    # output_dir should be /project_path/genome_version/
     String combined_gvcf_dir = "~{output_dir}/gvcf/combined_gvcf"
     String BN = basename("~{interval_file}")
     String interval_name = sub(BN, "\\.interval_list$", "")
@@ -381,7 +408,7 @@ task merge_combined_gvcfs {
         String rt_additional_parameters = ""
     }
 
-    # output_dir should be /project_path/genome/
+    # output_dir should be /project_path/genome_version/
     String cohort_gvcf_dir = "~{output_dir}/gvcf"
     String cohort_vcf_dir = "~{output_dir}/vcf"
     String cohort_gvcf = "~{cohort_gvcf_dir}/~{project_name}_cohort.g.vcf.gz"
@@ -530,8 +557,8 @@ task generate_sample_vcfs {
         # runtime parameters
         Int cpus = 16
         Int memory = 32000
-        String partition = "shortq"
-        String time = "1:00:00"
+        String partition = "mediumq"
+        String time = "2-00:00:00"
         String rt_additional_parameters = ""
     }
 
@@ -587,7 +614,7 @@ workflow variant_calling {
         File ref_bwt
         File ref_pac
         File ref_sa
-        String genome
+        String genome_version
         File ref_dict
         File dbsnp_vcf
         File dbsnp_idx
@@ -597,14 +624,14 @@ workflow variant_calling {
         Array[String]? tumor_samples
         Int genotype_scatter_count = 10
         String? split_intervals_extra_args
-        String perform_germline_variant_calling = "no"
-        String generate_germline_sample_vcfs = "no"
+        String perform_germline_variant_calling = "yes"
+        String generate_germline_sample_vcfs = "yes"
 
     }
 
-    String output_dir = "~{project_path}/~{genome}"
+    String output_dir = "~{project_path}/~{genome_version}"
     String config_dir = "~{project_path}/config_files"
-    String bam_dir = "~{project_path}/~{genome}/bam"
+    String bam_dir = "~{project_path}/~{genome_version}/bam"
     scatter(sample_name in sample_list) {
         File sample_tsv  = "~{config_dir}/~{sample_name}.tsv"
         Map[String, String] sample_map = read_map(sample_tsv)
@@ -627,7 +654,8 @@ workflow variant_calling {
                 ref_pac = ref_pac,
                 ref_sa = ref_sa,
                 output_dir = output_dir,
-                gatk_jar = gatk_jar
+                gatk_jar = gatk_jar,
+                genome_version = genome_version
         }
     }
 

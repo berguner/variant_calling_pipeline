@@ -56,7 +56,7 @@ if __name__ == '__main__':
 
     # Create the output folders
     project_path = config['project_path']
-    output_path = os.path.join(project_path, config['genome'])
+    output_path = os.path.join(project_path, config['genome_version'])
     json_path = os.path.join(project_path, 'config_files')
     if not os.path.exists(project_path):
         os.mkdir(project_path)
@@ -66,10 +66,10 @@ if __name__ == '__main__':
         os.mkdir(json_path)
 
     # Parse necessary configurations
-    project_genome = config['genome']
+    project_genome = config['genome_version']
     inputs_dict = {'variant_calling.project_name': config['project_name'],
                    'variant_calling.project_path': config['project_path'],
-                   'variant_calling.genome': project_genome
+                   'variant_calling.genome_version': project_genome
                    }
 
     # Collect direct configurations for WDL tasks

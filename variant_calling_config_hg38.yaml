@@ -1,4 +1,4 @@
-genome: "hg38"
+genome_version: "hg38"
 
 # Specify the ABSOLUTE PATH of input files using variable path expressions
 # Entries correspond to values in the data_source column in sample_annotation table
