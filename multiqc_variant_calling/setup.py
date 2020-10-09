@@ -5,11 +5,11 @@ MultiQC plugin for reporting results of pipelines used at BSF
 
 from setuptools import setup, find_packages
 
-version = '0.1'
+version = '0.2'
 
 setup(
     name = 'variant_calling_report',
-    version = 0.1,
+    version = 0.2,
     author = 'Bekir Erguener',
     author_email = 'berguener@cemm.at',
     description = "MultiQC plugin for reporting results of the variant calling pipeline used at BSF",

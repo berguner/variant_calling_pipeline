@@ -569,7 +569,7 @@ task generate_sample_vcfs {
         SAMPLE_LIST=`bcftools query -l ~{input_vcf}`
         for sample in ${SAMPLE_LIST};
         do
-            echo -e "bcftools view -Oz -o ~{output_vcf_dir}/${sample}.vcf.gz -s ${sample} ~{input_vcf}"
+            echo -e "bcftools view -e 'GT=\"RR\" || GT=\"mis\"' -Oz -o ~{output_vcf_dir}/${sample}.vcf.gz -s ${sample} ~{input_vcf}"
         done | parallel --no-notice -j ~{cpus} :::
 
         for sample in ${SAMPLE_LIST};

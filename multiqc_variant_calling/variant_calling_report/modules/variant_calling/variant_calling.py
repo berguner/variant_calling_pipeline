@@ -49,7 +49,16 @@ class MultiqcModule(BaseMultiqcModule):
         data = {}
         for sample_name in self.sample_sas_dict:
             data[sample_name] = {}
-            data[sample_name]['Tissue'] = self.sample_sas_dict[sample_name]['tissue']
+            # Fill in sample's tissue information
+            if 'tissue' in self.sample_sas_dict[sample_name]:
+                data[sample_name]['Tissue'] = self.sample_sas_dict[sample_name]['tissue']
+            # Get sex annotation
+            if 'sex' in self.sample_sas_dict[sample_name]:
+                data[sample_name]['annotated_sex'] = self.sample_sas_dict[sample_name]['sex']
+            # Get the sample's inferred sex
+            sex_file = os.path.join(config.project_path, config.genome_version, 'bam/{}.sex'.format(sample_name))
+            with open(sex_file, 'r') as sf:
+                data[sample_name]['inferred_sex'] = sf.readline().split(' ')[1]
 
         headers = OrderedDict()
         headers['Tissue'] = {
@@ -57,13 +66,23 @@ class MultiqcModule(BaseMultiqcModule):
             'title': 'Tissue',
             'scale': False
         }
+        headers['annotated_sex'] = {
+            'description': 'Inferred sex based on the reads aligned to the SRY gene',
+            'title': 'Annotated Sex',
+            'scale': False
+        }
+        headers['inferred_sex'] = {
+            'description': 'Inferred sex based on the reads aligned to the SRY gene',
+            'title': 'Inferred Sex',
+            'scale': False
+        }
 
         self.general_stats_addcols(data=data, headers=headers)
 
     def add_download_table(self):
         # Create a table with download links to various files
-        results_url = config.project_url
-        results_path = os.path.join(config.project_path, config.genome)
+        results_url = '../../'.format(config.genome_version) # os.path.join(config.base_url, config.project_uuid)
+        results_path = os.path.join(config.project_path, config.genome_version)
 
         # Configuration for the MultiQC table
         table_config = {
@@ -85,11 +104,11 @@ class MultiqcModule(BaseMultiqcModule):
             'description': 'BWA-mem alignment results in BAM format',
             'scale': False
         }
-        headers['VCF'] = {
-            'title': 'Germline VCF',
-            'description': 'VCF files containing the germline variants detected by GATK HaplotypeCaller',
-            'scale': False
-        }
+        # headers['VCF'] = {
+        #     'title': 'Germline VCF',
+        #     'description': 'VCF files containing the germline variants detected by GATK HaplotypeCaller',
+        #     'scale': False
+        # }
         headers['VEP_VCF'] = {
             'title': 'Annotated Germline VCF',
             'description': 'VCF files containing the germline variants annotated by Ensembl VEP',
@@ -116,24 +135,24 @@ class MultiqcModule(BaseMultiqcModule):
             bam_path = os.path.join(results_path, 'bam', '{}.bam'.format(sample_name))
             bai_path = os.path.join(results_path, 'bam', '{}.bam.bai'.format(sample_name))
             if os.path.exists(bam_path) and os.path.exists(bai_path):
-                sample_bam_url = '{}/{}/bam/{}.bam'.format(results_url, config.genome, sample_name)
-                sample_bai_url = '{}/{}/bam/{}.bam.bai'.format(results_url, config.genome, sample_name)
+                sample_bam_url = '{}/{}/bam/{}.bam'.format(results_url, config.genome_version, sample_name)
+                sample_bai_url = '{}/{}/bam/{}.bam.bai'.format(results_url, config.genome_version, sample_name)
                 data[sample_name]['BAM'] = '<a href=\"{}\">{} bam</a><br><a href=\"{}\">{} bai</a>'.format(
                     sample_bam_url, sample_name, sample_bai_url, sample_name)
 
-            vcf_path = os.path.join(results_path, 'vcf', '{}.vcf.gz'.format(sample_name))
-            vcf_tbi_path = os.path.join(results_path, 'vcf', '{}.vcf.gz.tbi'.format(sample_name))
-            if os.path.exists(vcf_path) and os.path.exists(vcf_tbi_path):
-                sample_vcf_url = '{}/{}/vcf/{}.vcf.gz'.format(results_url, config.genome, sample_name)
-                sample_vcf_tbi_url = '{}/{}/vcf/{}.vcf.gz.tbi'.format(results_url, config.genome, sample_name)
-                data[sample_name]['VCF'] = '<a href=\"{}\">{} vcf</a><br><a href=\"{}\">{} tbi</a>'.format(sample_vcf_url, sample_name,
-                                                                                           sample_vcf_tbi_url, sample_name)
+            # vcf_path = os.path.join(results_path, 'vcf', '{}.vcf.gz'.format(sample_name))
+            # vcf_tbi_path = os.path.join(results_path, 'vcf', '{}.vcf.gz.tbi'.format(sample_name))
+            # if os.path.exists(vcf_path) and os.path.exists(vcf_tbi_path):
+            #     sample_vcf_url = '{}/{}/vcf/{}.vcf.gz'.format(results_url, config.genome_version, sample_name)
+            #     sample_vcf_tbi_url = '{}/{}/vcf/{}.vcf.gz.tbi'.format(results_url, config.genome_version, sample_name)
+            #     data[sample_name]['VCF'] = '<a href=\"{}\">{} vcf</a><br><a href=\"{}\">{} tbi</a>'.format(sample_vcf_url, sample_name,
+            #                                                                                sample_vcf_tbi_url, sample_name)
 
-            vep_vcf_path = os.path.join(results_path, 'vcf', '{}.vep.vcf.gz'.format(sample_name))
-            vep_vcf_tbi_path = os.path.join(results_path, 'vcf', '{}.vep.vcf.gz.tbi'.format(sample_name))
+            vep_vcf_path = os.path.join(results_path, 'vcf', '{}.vcf.gz'.format(sample_name))
+            vep_vcf_tbi_path = os.path.join(results_path, 'vcf', '{}.vcf.gz.tbi'.format(sample_name))
             if os.path.exists(vep_vcf_path) and os.path.exists(vep_vcf_tbi_path):
-                sample_vep_vcf_url = '{}/{}/vcf/{}.vep.vcf.gz'.format(results_url, config.genome, sample_name)
-                sample_vep_vcf_tbi_url = '{}/{}/vcf/{}.vep.vcf.gz.tbi'.format(results_url, config.genome, sample_name)
+                sample_vep_vcf_url = '{}/{}/vcf/{}.vcf.gz'.format(results_url, config.genome_version, sample_name)
+                sample_vep_vcf_tbi_url = '{}/{}/vcf/{}.vcf.gz.tbi'.format(results_url, config.genome_version, sample_name)
                 data[sample_name]['VEP_VCF'] = '<a href=\"{}\">{} vep</a><br><a href=\"{}\">{} tbi</a>'.format(
                     sample_vep_vcf_url, sample_name,
                     sample_vep_vcf_tbi_url, sample_name)
@@ -141,8 +160,8 @@ class MultiqcModule(BaseMultiqcModule):
             mutect2_vcf_path = os.path.join(results_path, 'mutect2', '{}.vcf.gz'.format(sample_name))
             mutect2_vcf_tbi_path = os.path.join(results_path, 'mutect2', '{}.vcf.gz.tbi'.format(sample_name))
             if os.path.exists(mutect2_vcf_path) and os.path.exists(mutect2_vcf_tbi_path):
-                sample_mutect2_vcf_url = '{}/{}/mutect2/{}.vcf.gz'.format(results_url, config.genome, sample_name)
-                sample_mutect2_vcf_tbi_url = '{}/{}/mutect2/{}.vcf.gz.tbi'.format(results_url, config.genome, sample_name)
+                sample_mutect2_vcf_url = '{}/{}/mutect2/{}.vcf.gz'.format(results_url, config.genome_version, sample_name)
+                sample_mutect2_vcf_tbi_url = '{}/{}/mutect2/{}.vcf.gz.tbi'.format(results_url, config.genome_version, sample_name)
                 data[sample_name]['mutect2'] = '<a href=\"{}\">{} vcf</a><br><a href=\"{}\">{} tbi</a>'.format(
                     sample_mutect2_vcf_url, sample_name,
                     sample_mutect2_vcf_tbi_url, sample_name)
@@ -150,8 +169,8 @@ class MultiqcModule(BaseMultiqcModule):
             mutect2_vep_vcf_path = os.path.join(results_path, 'mutect2', '{}.vep.vcf.gz'.format(sample_name))
             mutect2_vep_vcf_tbi_path = os.path.join(results_path, 'mutect2', '{}.vep.vcf.gz.tbi'.format(sample_name))
             if os.path.exists(mutect2_vep_vcf_path) and os.path.exists(mutect2_vep_vcf_tbi_path):
-                sample_mutect2_vep_vcf_url = '{}/{}/mutect2/{}.vep.vcf.gz'.format(results_url, config.genome, sample_name)
-                sample_mutect2_vep_vcf_tbi_url = '{}/{}/mutect2/{}.vep.vcf.gz.tbi'.format(results_url, config.genome,
+                sample_mutect2_vep_vcf_url = '{}/{}/mutect2/{}.vep.vcf.gz'.format(results_url, config.genome_version, sample_name)
+                sample_mutect2_vep_vcf_tbi_url = '{}/{}/mutect2/{}.vep.vcf.gz.tbi'.format(results_url, config.genome_version,
                                                                                   sample_name)
                 data[sample_name]['VEP_mutect2'] = '<a href=\"{}\">{} vep</a><br><a href=\"{}\">{} tbi</a>'.format(
                     sample_mutect2_vep_vcf_url, sample_name,
@@ -159,16 +178,16 @@ class MultiqcModule(BaseMultiqcModule):
 
             cnvkit_path = os.path.join(results_path, 'cnvkit', 'results', '{}.cnvkit.tar.gz'.format(sample_name))
             if os.path.exists(cnvkit_path):
-                sample_cnvkit_url = '{}/{}/cnvkit/results/{}.cnvkit.tar.gz'.format(results_url, config.genome, sample_name)
+                sample_cnvkit_url = '{}/{}/cnvkit/results/{}.cnvkit.tar.gz'.format(results_url, config.genome_version, sample_name)
                 data[sample_name]['cnvkit'] = '<a href=\"{}\">{} CNV</a>'.format(
                     sample_cnvkit_url, sample_name)
         section_description = 'Download links for the variant calling results'
 
         cohort_vcf_path = os.path.join(results_path, 'vcf', '{}_cohort.vcf.gz'.format(config.project_name))
-        cohort_vcf_url = '{}/{}/vcf/{}_cohort.vcf.gz'.format(results_url, config.genome, config.project_name)
-        cohort_vcf_tbi_url = '{}/{}/vcf/{}_cohort.vcf.gz.tbi'.format(results_url, config.genome, config.project_name)
-        cohort_vcf_vep_url = '{}/{}/vcf/{}_cohort.vep.vcf.gz'.format(results_url, config.genome, config.project_name)
-        cohort_vcf_vep_tbi_url = '{}/{}/vcf/{}_cohort.vep.vcf.gz.tbi'.format(results_url, config.genome, config.project_name)
+        cohort_vcf_url = '{}/{}/vcf/{}_cohort.vcf.gz'.format(results_url, config.genome_version, config.project_name)
+        cohort_vcf_tbi_url = '{}/{}/vcf/{}_cohort.vcf.gz.tbi'.format(results_url, config.genome_version, config.project_name)
+        cohort_vcf_vep_url = '{}/{}/vcf/{}_cohort.vep.vcf.gz'.format(results_url, config.genome_version, config.project_name)
+        cohort_vcf_vep_tbi_url = '{}/{}/vcf/{}_cohort.vep.vcf.gz.tbi'.format(results_url, config.genome_version, config.project_name)
         if os.path.exists(cohort_vcf_path):
             section_description += '<br><a href=\"{}\" target=\"_blank\">' \
                                    'Click here to download the cohort (multi sample) germline VCF ' \
