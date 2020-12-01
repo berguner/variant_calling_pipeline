@@ -8,8 +8,8 @@
 JAVATMP="/scratch/users/berguener/tmpdir/"
 SAMPLE_NAME=$1
 SAMPLE_BAM="$SAMPLE_NAME.bam"
-INTERVAL_LIST="/data/groups/lab_bsf/resources/interval_lists/Twist_Exome_RefSeq_targets_hg38.interval_list"
-BED="/data/groups/lab_bsf/resources/interval_lists/Twist_Exome_RefSeq_targets_hg38.bed"
+INTERVAL_LIST="/data/groups/lab_bsf/resources/interval_lists/Ensembl_e99_Twist_RefSeq_exome_targets_hg38.interval_list"
+BED="/data/groups/lab_bsf/resources/interval_lists/Ensembl_e99_Twist_RefSeq_exome_targets_hg38.bed"
 REF_FASTA="/scratch/lab_bsf/resources/GATK/hg38/v0/Homo_sapiens_assembly38.fasta"
 GTF="/data/groups/lab_bsf/resources/variant_calling_resources/Homo_sapiens.GRCh38.100.gtf.gz"
 GATK_3_JAR="/scratch/lab_bsf/modules/applications/GenomeAnalysisTK-3.8-1-0-gf15c1c3ef/GenomeAnalysisTK.jar"
