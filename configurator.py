@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 
 import argparse
-import yaml, json
+import yaml
+import json
 import csv
 import os
 import sys
 from collections.abc import Mapping
-from string import Template
+
 
 def update(d, u):
     """
@@ -101,11 +102,6 @@ if __name__ == '__main__':
     if len(tumor_samples) > 0:
         inputs_dict['variant_calling.tumor_samples'] = tumor_samples
 
-    # Dump the inputs.json file
-    project_json = os.path.join(json_path, '{}.inputs.json'.format(config['project_name']))
-    with open(project_json, 'w') as output:
-        json.dump(inputs_dict, output, indent=2)
-
     # Read sample details
     sample_dicts = []
     for sample in sas_dict:
@@ -130,10 +126,12 @@ if __name__ == '__main__':
                         source_stats = os.stat(source)
                         raw_size_mb += int(source_stats.st_size / (1024 * 1024))
                 else:
-                    print('WARNING: Could not locate {} for sample {}'.format(source))
+                    print('WARNING: Could not locate {} for sample {}'.format(source, sample))
         # Skip the sample in case the input files weren't located
         if len(bam_sources) == 0:
             print('WARNING: Could not locate any raw data files for sample {}, skipping.'.format(sample))
+            inputs_dict['variant_calling.sample_list'].remove(sample)
+
         else:
             print('Sample {} has {} data sources, total size is {}MB'.format(sample, len(bam_sources), raw_size_mb))
             sample_dict['raw_bams'] = ' '.join(bam_sources)
@@ -142,3 +140,8 @@ if __name__ == '__main__':
             with open(sample_tsv, 'w') as output:
                 for key in sample_dict:
                     output.write('{}\t{}\n'.format(key, sample_dict[key]))
+
+    # Dump the inputs.json file
+    project_json = os.path.join(json_path, '{}.inputs.json'.format(config['project_name']))
+    with open(project_json, 'w') as output:
+        json.dump(inputs_dict, output, indent=2)

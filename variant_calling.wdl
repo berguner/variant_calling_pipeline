@@ -29,7 +29,8 @@ task bwa_align_ubam {
         Int memory = 16000
         String partition = "mediumq"
         String time = "2-00:00:00"
-        String rt_additional_parameters = ""
+        String? rt_additional_parameters
+        String? rt_image
     }
 
     # bam_dir would be /project_path/genome_version/bam
@@ -55,7 +56,7 @@ task bwa_align_ubam {
             # Continue if nothing had failed during the alignment step
             if [ $? -eq "0" ]; then
                 set -e
-                export GATK_LOCAL_JAR=~{default="/root/gatk.jar" gatk_jar}
+                export GATK_LOCAL_JAR=~{default="/gatk/gatk.jar" gatk_jar}
 
                 gatk --java-options "-Djava.io.tmpdir=~{output_dir} -Xmx8g" MarkDuplicates \
                     -I "~{bam_dir}/~{sample.sample_name}.aligned.bam" \
@@ -107,6 +108,7 @@ task bwa_align_ubam {
         rt_queue: partition
         rt_time: time
         rt_additional_parameters: rt_additional_parameters
+        rt_image: rt_image
     }
 
     output {
@@ -129,7 +131,8 @@ task collect_wes_metrics {
         Int memory = 8000
         String partition = "mediumq"
         String time = "2-00:00:00"
-        String rt_additional_parameters = ""
+        String? rt_additional_parameters
+        String? rt_image
     }
 
     # output_dir should be /project_path/genom/bam/
@@ -141,7 +144,7 @@ task collect_wes_metrics {
     command {
         # Run each step unless the output files are there
         set -e
-        export GATK_LOCAL_JAR=~{default="/root/gatk.jar" gatk_jar}
+        export GATK_LOCAL_JAR=~{default="/gatk/gatk.jar" gatk_jar}
         if [ ! -f "~{output_dir}/~{sample_name}.insert_size_metrics.tsv" ]; then
             gatk --java-options "-Xmx4g" CollectInsertSizeMetrics \
                 -R ~{ref_fasta} \
@@ -176,6 +179,7 @@ task collect_wes_metrics {
         rt_queue: partition
         rt_time: time
         rt_additional_parameters: rt_additional_parameters
+        rt_image: rt_image
     }
     output{
         File insert_size_metrics = "~{output_dir}/~{sample_name}.insert_size_metrics.tsv"
@@ -201,7 +205,8 @@ task generate_sample_gvcf {
         Int memory = 16000
         String partition = "mediumq"
         String time = "2-00:00:00"
-        String rt_additional_parameters = ""
+        String? rt_additional_parameters
+        String? rt_image
     }
 
     String parent_dir = "~{output_dir}/gvcf"
@@ -261,6 +266,7 @@ task generate_sample_gvcf {
         rt_queue: partition
         rt_time: time
         rt_additional_parameters: rt_additional_parameters
+        rt_image: rt_image
     }
 
     output {
@@ -284,12 +290,13 @@ task split_intervals {
         Int memory = 4000
         String partition = "shortq"
         String time = "1:00:00"
-        String rt_additional_parameters = ""
+        String? rt_additional_parameters
+        String? rt_image
     }
 
     command {
         set -e
-        export GATK_LOCAL_JAR=~{default="/root/gatk.jar" gatk_jar}
+        export GATK_LOCAL_JAR=~{default="/gatk/gatk.jar" gatk_jar}
 
         mkdir interval-files
         gatk --java-options "-Xmx2g" SplitIntervals \
@@ -306,6 +313,7 @@ task split_intervals {
         rt_queue: partition
         rt_time: time
         rt_additional_parameters: rt_additional_parameters
+        rt_image: rt_image
     }
 
     output {
@@ -331,7 +339,8 @@ task combine_genotype_gvcfs {
         Int memory = 16000
         String partition = "mediumq"
         String time = "2-00:00:00"
-        String rt_additional_parameters = ""
+        String? rt_additional_parameters
+        String? rt_image
     }
 
     # output_dir should be /project_path/genome_version/
@@ -344,7 +353,7 @@ task combine_genotype_gvcfs {
         [ ! -d "~{combined_gvcf_dir}" ] && mkdir -p ~{combined_gvcf_dir};
 
         set -e
-        export GATK_LOCAL_JAR=~{default="/root/gatk.jar" gatk_jar}
+        export GATK_LOCAL_JAR=~{default="/gatk/gatk.jar" gatk_jar}
 
         ### This is a temporary solution to avaoid the cromwell error:
         ### cannot interpolate Array[File?] into a command string with attribute set
@@ -378,6 +387,7 @@ task combine_genotype_gvcfs {
         rt_queue: partition
         rt_time: time
         rt_additional_parameters: rt_additional_parameters
+        rt_image: rt_image
     }
 
     output {
@@ -405,7 +415,8 @@ task merge_combined_gvcfs {
         Int memory = 8000
         String partition = "mediumq"
         String time = "2-00:00:00"
-        String rt_additional_parameters = ""
+        String? rt_additional_parameters
+        String? rt_image
     }
 
     # output_dir should be /project_path/genome_version/
@@ -420,7 +431,7 @@ task merge_combined_gvcfs {
         [ ! -d "~{cohort_vcf_dir}" ] && mkdir -p ~{cohort_vcf_dir};
 
         set -e
-        export GATK_LOCAL_JAR=~{default="/root/gatk.jar" gatk_jar}
+        export GATK_LOCAL_JAR=~{default="/gatk/gatk.jar" gatk_jar}
         # Rename the existing cohort files
         if [ -f "~{cohort_gvcf}" ]; then
             mv "~{cohort_gvcf}" "~{cohort_gvcf}.old";
@@ -474,6 +485,7 @@ task merge_combined_gvcfs {
         rt_queue: partition
         rt_time: time
         rt_additional_parameters: rt_additional_parameters
+        rt_image: rt_image
     }
 
     output {
@@ -494,6 +506,7 @@ task annotate_vcf_vep {
         String fasta
         String assembly
         String output_vcf_dir
+        String vcf_clinvar
         File input_vcf
         File input_vcf_tbi
 
@@ -502,14 +515,14 @@ task annotate_vcf_vep {
         Int memory = 32000
         String partition = "mediumq"
         String time = "2-00:00:00"
-        String rt_additional_parameters = ""
+        String? rt_additional_parameters
+        String? rt_image
     }
 
     String input_basename = basename("~{input_vcf}")
     String output_prefix = sub(input_basename, "\\.vcf.gz$", "")
 
     command {
-
         ~{vep_executable} \
             --allele_number --allow_non_variant \
             --assembly ~{assembly} \
@@ -520,6 +533,7 @@ task annotate_vcf_vep {
             --flag_pick_allele_gene --force_overwrite --format vcf \
             --gencode_basic --hgvsg --exclude_predicted \
             --plugin CADD,~{CADD_SNVs},~{CADD_indels} \
+            --custom ~{vcf_clinvar},ClnV,vcf,exact,0,ALLELEID,ORIGIN,CLNSIG,CLNREVSTAT,CLNDN \
             --species homo_sapiens --merged \
             --tmpdir ~{output_vcf_dir} \
             --vcf --compress_output bgzip --fork ~{cpus} \
@@ -537,6 +551,7 @@ task annotate_vcf_vep {
         rt_queue: partition
         rt_time: time
         rt_additional_parameters: rt_additional_parameters
+        rt_image: rt_image
     }
 
     output {
@@ -559,12 +574,13 @@ task generate_sample_vcfs {
         Int memory = 32000
         String partition = "mediumq"
         String time = "2-00:00:00"
-        String rt_additional_parameters = ""
+        String? rt_additional_parameters
+        String? rt_image
     }
 
     command <<<
         set -e
-        export GATK_LOCAL_JAR=~{default="/root/gatk.jar" gatk_jar}
+        export GATK_LOCAL_JAR=~{default="/gatk/gatk.jar" gatk_jar}
 
         SAMPLE_LIST=`bcftools query -l ~{input_vcf}`
         for sample in ${SAMPLE_LIST};
@@ -593,6 +609,7 @@ task generate_sample_vcfs {
         rt_queue: partition
         rt_time: time
         rt_additional_parameters: rt_additional_parameters
+        rt_image: rt_image
     }
 
     output {
@@ -626,7 +643,7 @@ workflow variant_calling {
         String? split_intervals_extra_args
         String perform_germline_variant_calling = "yes"
         String generate_germline_sample_vcfs = "yes"
-
+        String? rt_image
     }
 
     String output_dir = "~{project_path}/~{genome_version}"
@@ -655,7 +672,8 @@ workflow variant_calling {
                 ref_sa = ref_sa,
                 output_dir = output_dir,
                 gatk_jar = gatk_jar,
-                genome_version = genome_version
+                genome_version = genome_version,
+                rt_image = rt_image
         }
     }
 
@@ -666,7 +684,8 @@ workflow variant_calling {
                 ref_fasta = ref_fasta,
                 ref_fai = ref_fai,
                 output_dir = bam_dir,
-                gatk_jar = gatk_jar
+                gatk_jar = gatk_jar,
+                rt_image = rt_image
         }
     }
 
@@ -682,7 +701,8 @@ workflow variant_calling {
                         calling_intervals = variant_calling_intervals,
                         interval_padding = interval_padding,
                         output_dir = output_dir,
-                        gatk_jar = gatk_jar
+                        gatk_jar = gatk_jar,
+                        rt_image = rt_image
                 }
             }
         }
@@ -695,7 +715,8 @@ workflow variant_calling {
                 ref_dict = ref_dict,
                 intervals = variant_calling_intervals,
                 gatk_jar = gatk_jar,
-                split_intervals_extra_args = split_intervals_extra_args
+                split_intervals_extra_args = split_intervals_extra_args,
+                rt_image = rt_image
         }
 
         if(length(generate_sample_gvcf.output_gvcf) > 0) {
@@ -712,7 +733,8 @@ workflow variant_calling {
                         dbsnp_idx = dbsnp_idx,
                         gatk_jar = gatk_jar,
                         output_dir = output_dir,
-                        input_gvcfs = my_gvcfs
+                        input_gvcfs = my_gvcfs,
+                        rt_image = rt_image
                 }
             }
         }
@@ -726,7 +748,8 @@ workflow variant_calling {
                 input_gvcfs = combine_genotype_gvcfs.combined_gvcf,
                 input_gvcf_tbis = combine_genotype_gvcfs.combined_gvcf_tbi,
                 input_vcfs = combine_genotype_gvcfs.genotyped_vcf,
-                input_vcf_tbis = combine_genotype_gvcfs.genotyped_vcf_tbi
+                input_vcf_tbis = combine_genotype_gvcfs.genotyped_vcf_tbi,
+                rt_image = rt_image
         }
 
         String output_vcf_dir = "~{output_dir}/vcf"
@@ -745,7 +768,8 @@ workflow variant_calling {
                     input_vcf_tbi = annotate_vcf_vep.annotated_vcf_tbi,
                     dbsnp_vcf = dbsnp_vcf,
                     dbsnp_vcf_tbi = dbsnp_idx,
-                    gatk_jar = gatk_jar
+                    gatk_jar = gatk_jar,
+                    rt_image = rt_image
             }
         }
     }

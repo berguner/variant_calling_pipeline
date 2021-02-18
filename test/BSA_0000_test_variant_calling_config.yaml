@@ -1,14 +1,14 @@
 project_name: "BSA_0000_test_variant_calling"
-project_path: "/scratch/users/berguener/junk/BSA_0000_test_variant_calling"
+project_path: "/nobackup/lab_bsf/users/berguener/junk/BSA_0000_test_variant_calling"
 sample_annotation: "/home/berguener/src/variant_calling_pipeline/test/BSA_0000_test_variant_calling_sample_annotations.csv"
-project_uuid: BSA_0000_test_variant_calling_d6fc306f585c47fb8fa9a11ef3255227
-public_html_folder: /scratch/lab_bsf/public_html/projects/
-base_url: https://www.biomedical-sequencing.at/projects/
+project_uuid: "BSA_0000_test_variant_calling_d6fc306f585c47fb8fa9a11ef3255227"
+public_html_folder: "/nobackup/lab_bsf/public_html/projects/"
+base_url: "https://www.biomedical-sequencing.at/projects/"
 genome_version: "hg38"
 
 # MultiQC report
-title: BSA_0000_test_variant_calling
-intro_text: Results of the BSF Variant Calling Pipeline
+title: "BSA_0000_test_variant_calling"
+intro_text: "Results of the BSF Variant Calling Pipeline"
 comment: null
 report_comment: null
 report_header_info: null
@@ -26,7 +26,7 @@ picard_config:
 # The following section contains configurations that will be saved in inputs.json file as they are
 # You can configure inputs of various tasks directly from this section
 bypass_parser:
-  variant_calling.variant_calling_intervals: "/data/groups/lab_bsf/resources/interval_lists/Ensembl_Exons_hg38_e99_chromosomal.interval_list"
+  variant_calling.variant_calling_intervals: "/research/lab_bsf/resources/intervals/Ensembl_Exons_hg38_e99_chromosomal.interval_list"
   variant_calling.interval_padding: 50
   variant_calling.genotype_scatter_count: 4
   variant_calling.perform_germline_variant_calling: "yes"

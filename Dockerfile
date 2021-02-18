@@ -68,6 +68,7 @@ COPY --from=preprocess /root/source/bcftools-1.11/bcftools /usr/local/bin/bcftoo
 COPY --from=preprocess /root/source/samtools-1.11/samtools /usr/local/bin/samtools
 COPY --from=preprocess /root/source/samblaster-v.0.1.24/samblaster /usr/local/bin/samblaster
 COPY --from=preprocess /root/source/fastp-0.20.1/fastp /usr/local/bin/fastp
+COPY --from=preprocess /usr/bin/parallel /usr/bin/parallel
 
 CMD ["/bin/bash"]
 
