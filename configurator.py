@@ -110,6 +110,8 @@ if __name__ == '__main__':
                        'sample_type': sas_dict[sample][0]['sample_type'],
                        'library': sas_dict[sample][0]['library'],
                        'raw_bams': ''}
+        if 'UMI' in sas_dict[sample][0]:
+            sample_dict['UMI'] = sas_dict[sample][0]['UMI']
 
         row_list = sas_dict[sample]
         number_of_rows = len(row_list)

@@ -49,33 +49,49 @@ class MultiqcModule(BaseMultiqcModule):
         data = {}
         for sample_name in self.sample_sas_dict:
             data[sample_name] = {}
-            # Fill in sample's tissue information
-            if 'tissue' in self.sample_sas_dict[sample_name]:
-                data[sample_name]['Tissue'] = self.sample_sas_dict[sample_name]['tissue']
+            if hasattr(config, 'exploratory_columns'):
+                for column in config.exploratory_columns:
+                    if column in self.sample_sas_dict[sample_name]:
+                        data[sample_name][column] = self.sample_sas_dict[sample_name][column]
+            # # Fill in sample's tissue information
+            # if 'tissue' in self.sample_sas_dict[sample_name]:
+            #     data[sample_name]['Tissue'] = self.sample_sas_dict[sample_name]['tissue']
             # Get sex annotation
-            if 'sex' in self.sample_sas_dict[sample_name]:
+            if hasattr(config, 'include_sex') and config.include_sex == "yes" and 'sex' in self.sample_sas_dict[sample_name]:
                 data[sample_name]['annotated_sex'] = self.sample_sas_dict[sample_name]['sex']
             # Get the sample's inferred sex
-            sex_file = os.path.join(config.project_path, config.genome_version, 'bam/{}.sex'.format(sample_name))
-            with open(sex_file, 'r') as sf:
-                data[sample_name]['inferred_sex'] = sf.readline().split(' ')[1]
+            if hasattr(config, 'include_sex') and config.include_sex == "yes":
+                sex_file = os.path.join(config.project_path, config.genome_version, 'bam/{}.sex'.format(sample_name))
+                with open(sex_file, 'r') as sf:
+                    data[sample_name]['inferred_sex'] = sf.readline().split(' ')[1]
 
         headers = OrderedDict()
-        headers['Tissue'] = {
-            'description': 'Sample tissue',
-            'title': 'Tissue',
-            'scale': False
-        }
-        headers['annotated_sex'] = {
-            'description': 'Inferred sex based on the reads aligned to the SRY gene',
-            'title': 'Annotated Sex',
-            'scale': False
-        }
-        headers['inferred_sex'] = {
-            'description': 'Inferred sex based on the reads aligned to the SRY gene',
-            'title': 'Inferred Sex',
-            'scale': False
-        }
+        if hasattr(config, 'exploratory_columns'):
+            for column in config.exploratory_columns:
+                log.info('Adding exploratory column {}'.format(column))
+                headers[column] = {
+                    'description': column,
+                    'title': column,
+                    'scale': False }
+        else:
+            log.warning("No exploratory columns were specified in the config")
+        #
+        # headers['Tissue'] = {
+        #     'description': 'Sample tissue',
+        #     'title': 'Tissue',
+        #     'scale': False
+        # }
+        if hasattr(config, 'include_sex') and config.include_sex == "yes":
+            headers['annotated_sex'] = {
+                'description': 'Inferred sex based on the reads aligned to the SRY gene',
+                'title': 'Annotated Sex',
+                'scale': False
+            }
+            headers['inferred_sex'] = {
+                'description': 'Inferred sex based on the reads aligned to the SRY gene',
+                'title': 'Inferred Sex',
+                'scale': False
+            }
 
         self.general_stats_addcols(data=data, headers=headers)
 

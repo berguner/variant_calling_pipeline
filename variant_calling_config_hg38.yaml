@@ -11,7 +11,7 @@ data_sources:
 # The following section contains configurations that will be saved in inputs.json file as they are
 # You can configure inputs of various tasks directly from this section
 bypass_parser:
-  variant_calling.rt_image: "/nobackup/lab_bsf/users/berguener/singularity/bsf_variant_calling_0.2.sif"
+  variant_calling.rt_image: "/nobackup/lab_bsf/users/berguener/singularity/bsf_variant_calling_0.3.sif"
   variant_calling.ref_fasta: "/nobackup/lab_bsf/resources/GATK/hg38/v0/Homo_sapiens_assembly38.fasta"
   variant_calling.ref_fai: "/nobackup/lab_bsf/resources/GATK/hg38/v0/Homo_sapiens_assembly38.fasta.fai"
   variant_calling.ref_alt: "/nobackup/lab_bsf/resources/GATK/hg38/v0/Homo_sapiens_assembly38.fasta.64.alt"
@@ -23,6 +23,7 @@ bypass_parser:
   variant_calling.ref_dict: "/nobackup/lab_bsf/resources/GATK/hg38/v0/Homo_sapiens_assembly38.dict"
   variant_calling.dbsnp_vcf: "/nobackup/lab_bsf/resources/GATK/hg38/v0/dbsnp_146.hg38.vcf.gz"
   variant_calling.dbsnp_idx: "/nobackup/lab_bsf/resources/GATK/hg38/v0/dbsnp_146.hg38.vcf.gz.tbi"
+  variant_calling.tools_folder: "/home/berguener/src/variant_calling_pipeline/tools/"
   variant_calling.annotate_vcf_vep.vep_executable: "vep"
   variant_calling.annotate_vcf_vep.dir_cache: "/nobackup/lab_bsf/resources/VEP"
   variant_calling.annotate_vcf_vep.dir_plugins: "/nobackup/lab_bsf/resources/VEP/Plugins_103"

@@ -6,8 +6,170 @@ struct Sample {
     String library
     String sample_type
     String target_intervals
+    String? UMI
 }
 
+workflow variant_calling {
+    input {
+        String project_name
+        String project_path
+        File variant_calling_intervals
+        Int? interval_padding
+        File ref_fasta
+        File ref_fai
+        File? ref_alt
+        File ref_amb
+        File ref_ann
+        File ref_bwt
+        File ref_pac
+        File ref_sa
+        String genome_version
+        File ref_dict
+        File dbsnp_vcf
+        File dbsnp_idx
+        String? gatk_jar
+        Array[String] sample_list
+        Array[String]? germline_samples
+        Array[String]? tumor_samples
+        Int genotype_scatter_count = 10
+        String? split_intervals_extra_args
+        String perform_germline_variant_calling = "yes"
+        String perform_somatic_variant_calling = "yes"
+        String generate_germline_sample_vcfs = "yes"
+        String? rt_image
+        String tools_folder
+    }
+
+    String output_dir = "~{project_path}/~{genome_version}"
+    String config_dir = "~{project_path}/config_files"
+    String bam_dir = "~{project_path}/~{genome_version}/bam"
+    scatter(sample_name in sample_list) {
+        File sample_tsv  = "~{config_dir}/~{sample_name}.tsv"
+        Map[String, String] sample_map = read_map(sample_tsv)
+        Sample sample = { "sample_name": sample_name,
+                            "raw_bams": sample_map["raw_bams"],
+                            "library": sample_map["library"],
+                            "sample_type": sample_map["sample_type"],
+                            "target_intervals": sample_map["target_intervals"],
+                            "UMI": sample_map["UMI"]
+                        }
+
+        call bwa_align_ubam {
+            input:
+                sample = sample,
+                ref_fasta = ref_fasta,
+                ref_fai = ref_fai,
+                ref_alt = ref_alt,
+                ref_amb = ref_amb,
+                ref_ann = ref_ann,
+                ref_bwt = ref_bwt,
+                ref_pac = ref_pac,
+                ref_sa = ref_sa,
+                output_dir = output_dir,
+                gatk_jar = gatk_jar,
+                genome_version = genome_version,
+                rt_image = rt_image,
+                tools_folder = tools_folder
+        }
+    }
+
+    scatter(sample in bwa_align_ubam.processed_sample) {
+        call collect_wes_metrics {
+            input:
+                sample = sample,
+                ref_fasta = ref_fasta,
+                ref_fai = ref_fai,
+                output_dir = bam_dir,
+                gatk_jar = gatk_jar,
+                rt_image = rt_image
+        }
+    }
+
+    if(perform_germline_variant_calling == "yes") {
+        scatter(sample in bwa_align_ubam.processed_sample) {
+            if(sample.sample_type == "germline") {
+                call generate_sample_gvcf {
+                    input:
+                        sample = sample,
+                        ref_fasta = ref_fasta,
+                        ref_fai = ref_fai,
+                        ref_dict = ref_dict,
+                        calling_intervals = variant_calling_intervals,
+                        interval_padding = interval_padding,
+                        output_dir = output_dir,
+                        gatk_jar = gatk_jar,
+                        rt_image = rt_image
+                }
+            }
+        }
+
+        call split_intervals {
+            input:
+                scatter_count = genotype_scatter_count,
+                ref_fasta = ref_fasta,
+                ref_fai = ref_fai,
+                ref_dict = ref_dict,
+                intervals = variant_calling_intervals,
+                gatk_jar = gatk_jar,
+                split_intervals_extra_args = split_intervals_extra_args,
+                rt_image = rt_image
+        }
+
+        if(length(generate_sample_gvcf.output_gvcf) > 0) {
+            Array[String?] my_gvcfs = generate_sample_gvcf.output_gvcf
+            scatter(interval_file in split_intervals.interval_files) {
+                call combine_genotype_gvcfs {
+                    input:
+                        interval_file = interval_file,
+                        ref_fasta = ref_fasta,
+                        ref_fai = ref_fai,
+                        ref_dict = ref_dict,
+                        interval_padding = interval_padding,
+                        dbsnp_vcf = dbsnp_vcf,
+                        dbsnp_idx = dbsnp_idx,
+                        gatk_jar = gatk_jar,
+                        output_dir = output_dir,
+                        input_gvcfs = my_gvcfs,
+                        rt_image = rt_image
+                }
+            }
+        }
+
+        call merge_combined_gvcfs {
+            input:
+                output_dir = output_dir,
+                project_name = project_name,
+                ref_dict = ref_dict,
+                gatk_jar = gatk_jar,
+                input_gvcfs = combine_genotype_gvcfs.combined_gvcf,
+                input_gvcf_tbis = combine_genotype_gvcfs.combined_gvcf_tbi,
+                input_vcfs = combine_genotype_gvcfs.genotyped_vcf,
+                input_vcf_tbis = combine_genotype_gvcfs.genotyped_vcf_tbi,
+                rt_image = rt_image
+        }
+
+        String output_vcf_dir = "~{output_dir}/vcf"
+        call annotate_vcf_vep {
+            input:
+                output_vcf_dir = output_vcf_dir,
+                input_vcf = merge_combined_gvcfs.cohort_vcf,
+                input_vcf_tbi = merge_combined_gvcfs.cohort_vcf_tbi
+        }
+
+        if(generate_germline_sample_vcfs == "yes") {
+            call generate_sample_vcfs {
+                input:
+                    output_vcf_dir = output_vcf_dir,
+                    input_vcf = annotate_vcf_vep.annotated_vcf,
+                    input_vcf_tbi = annotate_vcf_vep.annotated_vcf_tbi,
+                    dbsnp_vcf = dbsnp_vcf,
+                    dbsnp_vcf_tbi = dbsnp_idx,
+                    gatk_jar = gatk_jar,
+                    rt_image = rt_image
+            }
+        }
+    }
+}
 
 task bwa_align_ubam {
     input {
@@ -23,6 +185,7 @@ task bwa_align_ubam {
         String? gatk_jar
         Sample sample
         String genome_version
+        String tools_folder
 
         # runtime parameters
         Int cpus = 8
@@ -38,7 +201,9 @@ task bwa_align_ubam {
     String raw_bams = sample.raw_bams
     # Read group ID and various info which is needed for GATK tools, BWA adds it to the aligned bam
     String RG = "@RG\\tID:~{sample.sample_name}\\tSM:~{sample.sample_name}\\tPL:illumina\\tLB:~{sample.library}"
-
+    String samtools_fastq = if (sample.UMI == "yes") then "samtools fastq -n -T 'RX,QX' " else "samtools fastq -n "
+    String move_umi = if (sample.UMI == "yes") then "python3 ~{tools_folder}/move_umi_to_tag.py |" else ""
+    String mark_duplicates_method = if (sample.UMI == "yes") then "UmiAwareMarkDuplicatesWithMateCigar --UMI_METRICS ~{bam_dir}/~{sample.sample_name}.umi_metrics.tsv" else "MarkDuplicates"
     command <<<
         [ ! -d "~{output_dir}" ] && mkdir -p ~{output_dir};
         [ ! -d "~{bam_dir}" ] && mkdir -p ~{bam_dir};
@@ -48,8 +213,9 @@ task bwa_align_ubam {
             # Set this for enabling summation of return codes from the piped commands
             set -o pipefail
 
-            for i in ~{raw_bams}; do samtools fastq $i 2>> "~{bam_dir}/~{sample.sample_name}.samtools.log" ; done | \
-                bwa mem -t ~{cpus} -R "~{RG}" -p ~{ref_fasta} - 2> "~{bam_dir}/~{sample.sample_name}.bwa.log" | \
+            for i in ~{raw_bams}; do ~{samtools_fastq} $i 2>> "~{bam_dir}/~{sample.sample_name}.samtools.log" ; done | \
+                awk '{ if(NR % 4 == 1) gsub("\t", "", $0); print $0}' | \
+                bwa mem -t ~{cpus} -R "~{RG}" -p ~{ref_fasta} - 2> "~{bam_dir}/~{sample.sample_name}.bwa.log" | ~{move_umi} \
                 samtools fixmate -O SAM - - 2>> "~{bam_dir}/~{sample.sample_name}.samtools.log" | \
                 samtools sort -m 1024m -@ ~{cpus / 2} -o "~{bam_dir}/~{sample.sample_name}.aligned.bam" - 2>> "~{bam_dir}/~{sample.sample_name}.samtools.log"
 
@@ -58,7 +224,7 @@ task bwa_align_ubam {
                 set -e
                 export GATK_LOCAL_JAR=~{default="/gatk/gatk.jar" gatk_jar}
 
-                gatk --java-options "-Djava.io.tmpdir=~{output_dir} -Xmx8g" MarkDuplicates \
+                gatk --java-options "-Djava.io.tmpdir=~{output_dir} -Xmx8g" ~{mark_duplicates_method} \
                     -I "~{bam_dir}/~{sample.sample_name}.aligned.bam" \
                     -M "~{bam_dir}/~{sample.sample_name}.duplicate_metrics.tsv" \
                     -O "~{bam_dir}/~{sample.sample_name}.bam" \
@@ -614,163 +780,5 @@ task generate_sample_vcfs {
 
     output {
         Array[File] all_vcf_files = glob("~{output_vcf_dir}/*.vcf.gz")
-    }
-}
-
-workflow variant_calling {
-    input {
-        String project_name
-        String project_path
-        File variant_calling_intervals
-        Int? interval_padding
-        File ref_fasta
-        File ref_fai
-        File? ref_alt
-        File ref_amb
-        File ref_ann
-        File ref_bwt
-        File ref_pac
-        File ref_sa
-        String genome_version
-        File ref_dict
-        File dbsnp_vcf
-        File dbsnp_idx
-        String? gatk_jar
-        Array[String] sample_list
-        Array[String]? germline_samples
-        Array[String]? tumor_samples
-        Int genotype_scatter_count = 10
-        String? split_intervals_extra_args
-        String perform_germline_variant_calling = "yes"
-        String generate_germline_sample_vcfs = "yes"
-        String? rt_image
-    }
-
-    String output_dir = "~{project_path}/~{genome_version}"
-    String config_dir = "~{project_path}/config_files"
-    String bam_dir = "~{project_path}/~{genome_version}/bam"
-    scatter(sample_name in sample_list) {
-        File sample_tsv  = "~{config_dir}/~{sample_name}.tsv"
-        Map[String, String] sample_map = read_map(sample_tsv)
-        Sample sample = { "sample_name": sample_name,
-                            "raw_bams": sample_map["raw_bams"],
-                            "library": sample_map["library"],
-                            "sample_type": sample_map["sample_type"],
-                            "target_intervals": sample_map["target_intervals"]
-                        }
-
-        call bwa_align_ubam {
-            input:
-                sample = sample,
-                ref_fasta = ref_fasta,
-                ref_fai = ref_fai,
-                ref_alt = ref_alt,
-                ref_amb = ref_amb,
-                ref_ann = ref_ann,
-                ref_bwt = ref_bwt,
-                ref_pac = ref_pac,
-                ref_sa = ref_sa,
-                output_dir = output_dir,
-                gatk_jar = gatk_jar,
-                genome_version = genome_version,
-                rt_image = rt_image
-        }
-    }
-
-    scatter(sample in bwa_align_ubam.processed_sample) {
-        call collect_wes_metrics {
-            input:
-                sample = sample,
-                ref_fasta = ref_fasta,
-                ref_fai = ref_fai,
-                output_dir = bam_dir,
-                gatk_jar = gatk_jar,
-                rt_image = rt_image
-        }
-    }
-
-    if(perform_germline_variant_calling == "yes") {
-        scatter(sample in bwa_align_ubam.processed_sample) {
-            if(sample.sample_type == "germline") {
-                call generate_sample_gvcf {
-                    input:
-                        sample = sample,
-                        ref_fasta = ref_fasta,
-                        ref_fai = ref_fai,
-                        ref_dict = ref_dict,
-                        calling_intervals = variant_calling_intervals,
-                        interval_padding = interval_padding,
-                        output_dir = output_dir,
-                        gatk_jar = gatk_jar,
-                        rt_image = rt_image
-                }
-            }
-        }
-
-        call split_intervals {
-            input:
-                scatter_count = genotype_scatter_count,
-                ref_fasta = ref_fasta,
-                ref_fai = ref_fai,
-                ref_dict = ref_dict,
-                intervals = variant_calling_intervals,
-                gatk_jar = gatk_jar,
-                split_intervals_extra_args = split_intervals_extra_args,
-                rt_image = rt_image
-        }
-
-        if(length(generate_sample_gvcf.output_gvcf) > 0) {
-            Array[String?] my_gvcfs = generate_sample_gvcf.output_gvcf
-            scatter(interval_file in split_intervals.interval_files) {
-                call combine_genotype_gvcfs {
-                    input:
-                        interval_file = interval_file,
-                        ref_fasta = ref_fasta,
-                        ref_fai = ref_fai,
-                        ref_dict = ref_dict,
-                        interval_padding = interval_padding,
-                        dbsnp_vcf = dbsnp_vcf,
-                        dbsnp_idx = dbsnp_idx,
-                        gatk_jar = gatk_jar,
-                        output_dir = output_dir,
-                        input_gvcfs = my_gvcfs,
-                        rt_image = rt_image
-                }
-            }
-        }
-
-        call merge_combined_gvcfs {
-            input:
-                output_dir = output_dir,
-                project_name = project_name,
-                ref_dict = ref_dict,
-                gatk_jar = gatk_jar,
-                input_gvcfs = combine_genotype_gvcfs.combined_gvcf,
-                input_gvcf_tbis = combine_genotype_gvcfs.combined_gvcf_tbi,
-                input_vcfs = combine_genotype_gvcfs.genotyped_vcf,
-                input_vcf_tbis = combine_genotype_gvcfs.genotyped_vcf_tbi,
-                rt_image = rt_image
-        }
-
-        String output_vcf_dir = "~{output_dir}/vcf"
-        call annotate_vcf_vep {
-            input:
-                output_vcf_dir = output_vcf_dir,
-                input_vcf = merge_combined_gvcfs.cohort_vcf,
-                input_vcf_tbi = merge_combined_gvcfs.cohort_vcf_tbi
-        }
-
-        if(generate_germline_sample_vcfs == "yes") {
-            call generate_sample_vcfs {
-                input:
-                    output_vcf_dir = output_vcf_dir,
-                    input_vcf = annotate_vcf_vep.annotated_vcf,
-                    input_vcf_tbi = annotate_vcf_vep.annotated_vcf_tbi,
-                    dbsnp_vcf = dbsnp_vcf,
-                    dbsnp_vcf_tbi = dbsnp_idx,
-                    gatk_jar = gatk_jar,
-                    rt_image = rt_image
-            }
-        }
     }
 }
