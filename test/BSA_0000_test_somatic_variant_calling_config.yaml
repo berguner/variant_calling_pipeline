@@ -26,9 +26,11 @@ picard_config:
 # The following section contains configurations that will be saved in inputs.json file as they are
 # You can configure inputs of various tasks directly from this section
 bypass_parser:
-  variant_calling.variant_calling_intervals: "/research/lab_bsf/resources/intervals/Ensembl_Exons_hg38_e99_chromosomal.interval_list"
+  variant_calling.variant_calling_intervals: "/research/lab_bsf/resources/intervals/CEMM_Heme_v4_Agilent_20180719_targets_padding15_liftOver_hg38.interval_list"
   variant_calling.interval_padding: 100
   variant_calling.genotype_scatter_count: 4
   variant_calling.perform_germline_variant_calling: "no"
-  variant_calling.perform_somatic_variant_calling: "no"
+  variant_calling.perform_somatic_variant_calling: "yes"
   variant_calling.generate_germline_sample_vcfs: "no"
+  variant_calling.Mutect2.scatter_count: 4
+  variant_calling.Mutect2.m2_extra_args: "--genotype-germline-sites true --interval-padding 150"

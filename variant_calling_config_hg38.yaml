@@ -7,6 +7,7 @@ genome_version: "hg38"
 data_sources:
   bsf: /nobackup/lab_bsf/samples/{flowcell}/{flowcell}_{lane}_samples/{flowcell}_{lane}#{BSF_name}.bam
   bsf_test: /nobackup/lab_bsf/users/berguener/junk/varcall_test/{raw_bam}
+  full: "{raw_bam}"
 
 # The following section contains configurations that will be saved in inputs.json file as they are
 # You can configure inputs of various tasks directly from this section
@@ -33,3 +34,20 @@ bypass_parser:
   variant_calling.annotate_vcf_vep.fasta: "/nobackup/lab_bsf/resources/VEP/homo_sapiens_merged/103_GRCh38/Homo_sapiens.GRCh38.dna.toplevel.fa.gz"
   variant_calling.annotate_vcf_vep.assembly: "GRCh38"
   variant_calling.annotate_vcf_vep.rt_image: "/nobackup/lab_bsf/users/berguener/singularity/ensembl-vep_release_103.0.sif"
+  variant_calling.somatic_vcf_vep.vep_executable: "vep"
+  variant_calling.somatic_vcf_vep.dir_cache: "/nobackup/lab_bsf/resources/VEP"
+  variant_calling.somatic_vcf_vep.dir_plugins: "/nobackup/lab_bsf/resources/VEP/Plugins_103"
+  variant_calling.somatic_vcf_vep.CADD_SNVs: "/nobackup/lab_bsf/resources/CADD/hg38/1.6/whole_genome_SNVs.tsv.gz"
+  variant_calling.somatic_vcf_vep.CADD_indels: "/nobackup/lab_bsf/resources/CADD/hg38/1.6/gnomad.genomes.r3.0.indel.tsv.gz"
+  variant_calling.somatic_vcf_vep.vcf_clinvar: "/nobackup/lab_bsf/resources/ClinVar/hg38/clinvar_20210213.vcf.gz"
+  variant_calling.somatic_vcf_vep.fasta: "/nobackup/lab_bsf/resources/VEP/homo_sapiens_merged/103_GRCh38/Homo_sapiens.GRCh38.dna.toplevel.fa.gz"
+  variant_calling.somatic_vcf_vep.assembly: "GRCh38"
+  variant_calling.somatic_vcf_vep.rt_image: "/nobackup/lab_bsf/users/berguener/singularity/ensembl-vep_release_103.0.sif"
+  variant_calling.Mutect2.variants_for_contamination: "/nobackup/lab_bsf/resources/GATK/hg38/gatk-best-practices/somatic-hg38/small_exac_common_3.hg38.vcf.gz"
+  variant_calling.Mutect2.variants_for_contamination_idx: "/nobackup/lab_bsf/resources/GATK/hg38/gatk-best-practices/somatic-hg38/small_exac_common_3.hg38.vcf.gz.tbi"
+  variant_calling.Mutect2.gnomad: "/nobackup/lab_bsf/resources/GATK/hg38/gatk-best-practices/somatic-hg38/af-only-gnomad.hg38.vcf.gz"
+  variant_calling.Mutect2.gnomad_idx: "/nobackup/lab_bsf/resources/GATK/hg38/gatk-best-practices/somatic-hg38/af-only-gnomad.hg38.vcf.gz.tbi"
+  variant_calling.Mutect2.pon: "/research/lab_bsf/resources/mutect2_panel_of_normal_hg38.vcf.gz"
+  variant_calling.Mutect2.pon_idx: "/research/lab_bsf/resources/mutect2_panel_of_normal_hg38.vcf.gz.tbi"
+  variant_calling.Mutect2.gatk_override: "/nobackup/lab_bsf/users/berguener/bin/gatk-4.2.0.0/gatk-package-4.2.0.0-local.jar"
+  variant_calling.Mutect2.gatk_docker: "berguner/bsf_variant_calling:0.3"

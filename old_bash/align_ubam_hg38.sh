@@ -1,8 +1,9 @@
 #!/bin/bash
 #SBATCH --partition=mediumq
+#SBATCH --qos=mediumq
 #SBATCH --ntasks=1
-#SBATCH --cpus=16
-#SBATCH --mem=64000
+#SBATCH --cpus-per-task=24
+#SBATCH --mem=128000
 #SBATCH --time=2-00:00:00
 #SBATCH --nodes=1
 
@@ -11,11 +12,11 @@
 #module load java/jdk/1.8.0/102 parallel
 
 date
-THREADS=16
+THREADS=24
 ARGS=("$@")
-PICARD="/scratch/lab_bsf/modules/applications/picard/2.19.2_cemm/picard.jar"
-REF="/scratch/lab_bsf/resources/genomes/hg38/indices_for_BWA/hg38.fa"
-JAVATMP="/scratch/users/berguener/tmpdir/"
+PICARD="/nobackup/lab_bsf/applications/software/picard/2.19.2_cemm/picard.jar"
+REF="/nobackup/lab_bsf/resources/GATK/hg38/v0/Homo_sapiens_assembly38.fasta"
+JAVATMP="/nobackup/lab_bsf/users/berguener/tmpdir/"
 BAM="./bam"
 RAW="./raw"
 SAMPLE_NAME=${1}

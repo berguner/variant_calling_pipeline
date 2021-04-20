@@ -106,12 +106,20 @@ if __name__ == '__main__':
     sample_dicts = []
     for sample in sas_dict:
         sample_dict = {'sample_name': sample,
-                       'target_intervals': sas_dict[sample][0]['target_intervals'],
                        'sample_type': sas_dict[sample][0]['sample_type'],
                        'library': sas_dict[sample][0]['library'],
                        'raw_bams': ''}
         if 'UMI' in sas_dict[sample][0]:
             sample_dict['UMI'] = sas_dict[sample][0]['UMI']
+        if 'target_intervals' in sas_dict[sample][0]:
+            sample_dict['target_intervals'] = sas_dict[sample][0]['target_intervals']
+        if 'matched_normal' in sas_dict[sample][0]:
+            if sas_dict[sample][0]['sample_type'] == 'tumor' and sas_dict[sample][0]['matched_normal'] != '':
+                sample_dict['matched_normal'] = sas_dict[sample][0]['matched_normal']
+            elif sas_dict[sample][0]['sample_type'] == 'tumor' and sas_dict[sample][0]['matched_normal'] == '':
+                sample_dict['matched_normal'] = 'NULL'
+            elif sas_dict[sample][0]['sample_type'] == 'germline':
+                sample_dict['matched_normal'] = sample
 
         row_list = sas_dict[sample]
         number_of_rows = len(row_list)

@@ -1,11 +1,14 @@
 version 1.0
 
+import "mutect2_wdl/mutect2.wdl" as m2
+
 struct Sample {
     String sample_name
     String raw_bams
     String library
     String sample_type
-    String target_intervals
+    String matched_normal
+    String? target_intervals
     String? UMI
 }
 
@@ -38,6 +41,7 @@ workflow variant_calling {
         String generate_germline_sample_vcfs = "yes"
         String? rt_image
         String tools_folder
+        File? empty_file
     }
 
     String output_dir = "~{project_path}/~{genome_version}"
@@ -51,7 +55,8 @@ workflow variant_calling {
                             "library": sample_map["library"],
                             "sample_type": sample_map["sample_type"],
                             "target_intervals": sample_map["target_intervals"],
-                            "UMI": sample_map["UMI"]
+                            "UMI": sample_map["UMI"],
+                            "matched_normal": sample_map["matched_normal"]
                         }
 
         call bwa_align_ubam {
@@ -169,6 +174,37 @@ workflow variant_calling {
             }
         }
     }
+
+    if(perform_somatic_variant_calling == "yes") {
+        scatter(sample in bwa_align_ubam.processed_sample) {
+            if(sample.sample_type == "tumor") {
+                File tumor_bam = "~{output_dir}/bam/~{sample.sample_name}.bam"
+                File tumor_bai = "~{output_dir}/bam/~{sample.sample_name}.bam.bai"
+                File? normal_bam = if(sample.matched_normal != "NULL") then "~{output_dir}/bam/~{sample.matched_normal}.bam" else empty_file
+                File? normal_bai = if(sample.matched_normal != "NULL") then "~{output_dir}/bam/~{sample.matched_normal}.bam.bai" else empty_file
+                call m2.Mutect2 {
+                    input:
+                        tumor_reads = tumor_bam,
+                        tumor_reads_index = tumor_bai,
+                        normal_reads = normal_bam,
+                        normal_reads_index = normal_bai,
+                        ref_fasta = ref_fasta,
+                        ref_fai = ref_fai,
+                        ref_dict = ref_dict,
+                        intervals = variant_calling_intervals,
+                        compress_vcfs = true
+                }
+
+                String output_vcf_dir = "~{output_dir}/mutect2"
+                call annotate_vcf_vep as somatic_vcf_vep{
+                    input:
+                        output_vcf_dir = output_vcf_dir,
+                        input_vcf = Mutect2.filtered_vcf,
+                        input_vcf_tbi = Mutect2.filtered_vcf_idx
+                }
+            }
+        }
+    }
 }
 
 task bwa_align_ubam {
@@ -209,7 +245,7 @@ task bwa_align_ubam {
         [ ! -d "~{bam_dir}" ] && mkdir -p ~{bam_dir};
 
         # Run alignment if the output_bam file does not exist
-        if [ ! -f "~{bam_dir}/~{sample.sample_name}.bam" ]; then
+        if [[ ! -f "~{bam_dir}/~{sample.sample_name}.bam" && ! -f "~{bam_dir}/~{sample.sample_name}.aligned.bam" ]]; then
             # Set this for enabling summation of return codes from the piped commands
             set -o pipefail
 
@@ -238,6 +274,28 @@ task bwa_align_ubam {
                     rm "~{bam_dir}/~{sample.sample_name}.aligned.bam";
                     mv "~{bam_dir}/~{sample.sample_name}.bai" "~{bam_dir}/~{sample.sample_name}.bam.bai";
                 fi
+            fi
+        fi
+
+        # Run only the markduplicates if both sample.bam and sample.aligned.bam exist.
+        if [[ -f "~{bam_dir}/~{sample.sample_name}.bam" && -f "~{bam_dir}/~{sample.sample_name}.aligned.bam" ]]; then
+            rm "~{bam_dir}/~{sample.sample_name}.bam"
+            set -e
+            export GATK_LOCAL_JAR=~{default="/gatk/gatk.jar" gatk_jar}
+
+            gatk --java-options "-Djava.io.tmpdir=~{output_dir} -Xmx8g" ~{mark_duplicates_method} \
+                -I "~{bam_dir}/~{sample.sample_name}.aligned.bam" \
+                -M "~{bam_dir}/~{sample.sample_name}.duplicate_metrics.tsv" \
+                -O "~{bam_dir}/~{sample.sample_name}.bam" \
+                --OPTICAL_DUPLICATE_PIXEL_DISTANCE 10000 \
+                --ASSUME_SORTED true \
+                --CREATE_INDEX true \
+                > "~{bam_dir}/~{sample.sample_name}.markduplicates.log" 2>&1;
+
+            # Remove temporary aligned.bam file
+            if [ $? -eq "0" ]; then
+                rm "~{bam_dir}/~{sample.sample_name}.aligned.bam";
+                mv "~{bam_dir}/~{sample.sample_name}.bai" "~{bam_dir}/~{sample.sample_name}.bam.bai";
             fi
         fi
 
@@ -305,11 +363,12 @@ task collect_wes_metrics {
     File bam = "~{output_dir}/~{sample.sample_name}.bam"
     File bai = "~{output_dir}/~{sample.sample_name}.bam.bai"
     String sample_name = "~{sample.sample_name}"
-    String target_intervals = "~{sample.target_intervals}"
 
     command {
         # Run each step unless the output files are there
         set -e
+        # Assume WGS if target intervals file was not provided
+        export TARGET_INTERVALS=~{default="NULL" sample.target_intervals}
         export GATK_LOCAL_JAR=~{default="/gatk/gatk.jar" gatk_jar}
         if [ ! -f "~{output_dir}/~{sample_name}.insert_size_metrics.tsv" ]; then
             gatk --java-options "-Xmx4g" CollectInsertSizeMetrics \
@@ -328,14 +387,32 @@ task collect_wes_metrics {
                 > ~{output_dir}/~{sample_name}.alignment_summary_metrics.log 2>&1;
         fi
 
-        if [ ! -f "~{output_dir}/~{sample_name}.HS_metrics.tsv" ]; then
+        if [[ ! -f "~{output_dir}/~{sample_name}.HS_metrics.tsv" && "$TARGET_INTERVALS" != "NULL" ]]; then
             gatk --java-options "-Xmx4g" CollectHsMetrics \
                 -R ~{ref_fasta} \
                 -I ~{bam} \
-                --BAIT_INTERVALS ~{target_intervals} \
-                --TARGET_INTERVALS ~{target_intervals} \
+                --BAIT_INTERVALS ~{sample.target_intervals} \
+                --TARGET_INTERVALS ~{sample.target_intervals} \
                 -O ~{output_dir}/~{sample_name}.HS_metrics.tsv \
                 > ~{output_dir}/~{sample_name}.HS_metrics.log 2>&1;
+        fi
+
+        if [[ ! -f "~{output_dir}/~{sample_name}.gc_bias_metrics.tsv" && "$TARGET_INTERVALS" == "NULL" ]]; then
+            gatk --java-options "-Xmx4g" CollectGcBiasMetrics \
+                -R ~{ref_fasta} \
+                -I ~{bam} \
+                --CHART_OUTPUT ~{output_dir}/~{sample_name}.gc_bias_metrics.pdf \
+                --SUMMARY_OUTPUT ~{output_dir}/~{sample_name}.gc_summary_metrics.tsv \
+                -O ~{output_dir}/~{sample_name}.gc_bias_metrics.tsv \
+                > ~{output_dir}/~{sample_name}.gc_bias_metrics.log 2>&1;
+        fi
+
+        if [[ ! -f "~{output_dir}/~{sample_name}.wgs_metrics.tsv" && "$TARGET_INTERVALS" == "NULL" ]]; then
+            gatk --java-options "-Xmx4g" CollectWgsMetrics \
+                -R ~{ref_fasta} \
+                -I ~{bam} \
+                -O ~{output_dir}/~{sample_name}.wgs_metrics.tsv \
+                > ~{output_dir}/~{sample_name}.wgs_metrics.log 2>&1;
         fi
 
     }
@@ -689,6 +766,7 @@ task annotate_vcf_vep {
     String output_prefix = sub(input_basename, "\\.vcf.gz$", "")
 
     command {
+        [ ! -d "~{output_vcf_dir}" ] && mkdir -p ~{output_vcf_dir};
         ~{vep_executable} \
             --allele_number --allow_non_variant \
             --assembly ~{assembly} \
