@@ -156,14 +156,6 @@ class MultiqcModule(BaseMultiqcModule):
                 data[sample_name]['BAM'] = '<a href=\"{}\">{} bam</a><br><a href=\"{}\">{} bai</a>'.format(
                     sample_bam_url, sample_name, sample_bai_url, sample_name)
 
-            # vcf_path = os.path.join(results_path, 'vcf', '{}.vcf.gz'.format(sample_name))
-            # vcf_tbi_path = os.path.join(results_path, 'vcf', '{}.vcf.gz.tbi'.format(sample_name))
-            # if os.path.exists(vcf_path) and os.path.exists(vcf_tbi_path):
-            #     sample_vcf_url = '{}/{}/vcf/{}.vcf.gz'.format(results_url, config.genome_version, sample_name)
-            #     sample_vcf_tbi_url = '{}/{}/vcf/{}.vcf.gz.tbi'.format(results_url, config.genome_version, sample_name)
-            #     data[sample_name]['VCF'] = '<a href=\"{}\">{} vcf</a><br><a href=\"{}\">{} tbi</a>'.format(sample_vcf_url, sample_name,
-            #                                                                                sample_vcf_tbi_url, sample_name)
-
             vep_vcf_path = os.path.join(results_path, 'vcf', '{}.vcf.gz'.format(sample_name))
             vep_vcf_tbi_path = os.path.join(results_path, 'vcf', '{}.vcf.gz.tbi'.format(sample_name))
             if os.path.exists(vep_vcf_path) and os.path.exists(vep_vcf_tbi_path):
@@ -185,12 +177,16 @@ class MultiqcModule(BaseMultiqcModule):
             mutect2_vep_vcf_path = os.path.join(results_path, 'mutect2', '{}.vep.vcf.gz'.format(sample_name))
             mutect2_vep_vcf_tbi_path = os.path.join(results_path, 'mutect2', '{}.vep.vcf.gz.tbi'.format(sample_name))
             if os.path.exists(mutect2_vep_vcf_path) and os.path.exists(mutect2_vep_vcf_tbi_path):
+                sample_mutect2_vep_html_url = '{}/{}/mutect2/{}.vep.html'.format(results_url, config.genome_version,
+                                                                                  sample_name)
                 sample_mutect2_vep_vcf_url = '{}/{}/mutect2/{}.vep.vcf.gz'.format(results_url, config.genome_version, sample_name)
                 sample_mutect2_vep_vcf_tbi_url = '{}/{}/mutect2/{}.vep.vcf.gz.tbi'.format(results_url, config.genome_version,
                                                                                   sample_name)
-                data[sample_name]['VEP_mutect2'] = '<a href=\"{}\">{} vep</a><br><a href=\"{}\">{} tbi</a>'.format(
+                data[sample_name]['VEP_mutect2'] = '<a href=\"{}\">{} vep vcf</a><br><a href=\"{}\">{} vcf ' \
+                                                   'index</a><br><a href=\"{}\">{} vep report</a>'.format(
                     sample_mutect2_vep_vcf_url, sample_name,
-                    sample_mutect2_vep_vcf_tbi_url, sample_name)
+                    sample_mutect2_vep_vcf_tbi_url, sample_name,
+                    sample_mutect2_vep_html_url, sample_name)
 
             cnvkit_path = os.path.join(results_path, 'cnvkit', 'results', '{}.cnvkit.tar.gz'.format(sample_name))
             if os.path.exists(cnvkit_path):
