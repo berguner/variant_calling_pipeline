@@ -16,7 +16,7 @@ workflow variant_calling {
     input {
         String project_name
         String project_path
-        File variant_calling_intervals
+        File? variant_calling_intervals
         Int? interval_padding
         File ref_fasta
         File ref_fai
@@ -201,6 +201,18 @@ workflow variant_calling {
                         output_vcf_dir = output_vcf_dir,
                         input_vcf = Mutect2.filtered_vcf,
                         input_vcf_tbi = Mutect2.filtered_vcf_idx
+                }
+
+                call collect_variant_calling_metrics {
+                    input:
+                        sample = sample,
+                        output_vcf_dir = output_vcf_dir,
+                        input_vcf = Mutect2.filtered_vcf,
+                        input_vcf_tbi = Mutect2.filtered_vcf_idx,
+                        dbsnp_vcf = dbsnp_vcf,
+                        dbsnp_vcf_tbi = dbsnp_idx,
+                        gatk_jar = gatk_jar,
+                        rt_image = rt_image
                 }
             }
         }
@@ -439,7 +451,7 @@ task generate_sample_gvcf {
         File ref_fasta
         File ref_fai
         File ref_dict
-        File calling_intervals
+        File? calling_intervals
         Int? interval_padding
         String? gatk_jar
 
@@ -465,7 +477,7 @@ task generate_sample_gvcf {
 
             gatk --java-options "-Djava.io.tmpdir=~{gvcf_dir} -Xmx1g" \
                 SplitIntervals -R ~{ref_fasta} \
-                -L ~{calling_intervals} \
+                ~{"-L " + calling_intervals} \
                 --scatter-count ~{cpus} \
                 -O ~{gvcf_dir} \
                 > ~{gvcf_dir}/SplitIntervals.log 2>&1;
@@ -520,7 +532,7 @@ task generate_sample_gvcf {
 
 task split_intervals {
     input {
-        File intervals
+        File? intervals
         File ref_fasta
         File ref_fai
         File ref_dict
@@ -544,7 +556,7 @@ task split_intervals {
         mkdir interval-files
         gatk --java-options "-Xmx2g" SplitIntervals \
         -R ~{ref_fasta} \
-        -L ~{intervals} \
+        ~{"-L" + intervals} \
         -scatter ~{scatter_count} \
         -O interval-files
         cp interval-files/*.interval_list .
@@ -756,14 +768,16 @@ task annotate_vcf_vep {
         # runtime parameters
         Int cpus = 16
         Int memory = 32000
-        String partition = "mediumq"
-        String time = "2-00:00:00"
+        String partition = "shortq"
+        String time = "12:00:00"
         String? rt_additional_parameters
         String? rt_image
     }
 
     String input_basename = basename("~{input_vcf}")
-    String output_prefix = sub(input_basename, "\\.vcf.gz$", "")
+    # remove the -filtered suffix added by Mutect2
+    String pre_prefix = sub(input_basename, "-filtered", "")
+    String output_prefix = sub(pre_prefix, "\\.vcf.gz$", "")
 
     command {
         [ ! -d "~{output_vcf_dir}" ] && mkdir -p ~{output_vcf_dir};
@@ -858,5 +872,50 @@ task generate_sample_vcfs {
 
     output {
         Array[File] all_vcf_files = glob("~{output_vcf_dir}/*.vcf.gz")
+    }
+}
+
+task collect_variant_calling_metrics {
+    input {
+        Sample sample
+        File input_vcf
+        File input_vcf_tbi
+        File dbsnp_vcf
+        File dbsnp_vcf_tbi
+        String output_vcf_dir
+        String? gatk_jar
+
+        # runtime parameters
+        Int cpus = 2
+        Int memory = 8000
+        String partition = "shortq"
+        String time = "12:00:00"
+        String? rt_additional_parameters
+        String? rt_image
+    }
+
+    command <<<
+        set -e
+        export GATK_LOCAL_JAR=~{default="/gatk/gatk.jar" gatk_jar}
+
+        gatk --java-options "-Xmx4g -Xms128m -Djava.io.tmpdir:~{output_vcf_dir} -d64" \
+                CollectVariantCallingMetrics \
+                --INPUT ~{input_vcf} \
+                --OUTPUT ~{output_vcf_dir}/~{sample.sample_name} \
+                --DBSNP ~{dbsnp_vcf} > ~{output_vcf_dir}/~{sample.sample_name}.CollectVariantCallingMetrics.log 2>&1
+    >>>
+
+    runtime {
+        rt_cpus: cpus
+        rt_mem: memory
+        rt_queue: partition
+        rt_time: time
+        rt_additional_parameters: rt_additional_parameters
+        rt_image: rt_image
+    }
+
+    output {
+        File summary_metrics_file = "~{output_vcf_dir}/~{sample.sample_name}.variant_calling_summary_metrics"
+        File detail_metrics_file = "~{output_vcf_dir}/~{sample.sample_name}.variant_calling_detail_metrics"
     }
 }
