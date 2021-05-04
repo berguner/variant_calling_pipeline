@@ -238,7 +238,7 @@ task bwa_align_ubam {
         # runtime parameters
         Int cpus = 8
         Int memory = 16000
-        String partition = "mediumq"
+        String partition = "covid"
         String time = "2-00:00:00"
         String? rt_additional_parameters
         String? rt_image
@@ -350,6 +350,7 @@ task bwa_align_ubam {
     output {
         File output_bam = "~{bam_dir}/~{sample.sample_name}.bam"
         File output_bai = "~{bam_dir}/~{sample.sample_name}.bam.bai"
+        File duplicate_metrics = "~{bam_dir}/~{sample.sample_name}.duplicate_metrics.tsv"
         Sample processed_sample = sample
     }
 }
@@ -365,7 +366,7 @@ task collect_wes_metrics {
         # runtime parameters
         Int cpus = 2
         Int memory = 8000
-        String partition = "mediumq"
+        String partition = "covid"
         String time = "2-00:00:00"
         String? rt_additional_parameters
         String? rt_image
@@ -439,8 +440,9 @@ task collect_wes_metrics {
     output{
         File insert_size_metrics = "~{output_dir}/~{sample_name}.insert_size_metrics.tsv"
         File alignment_summary_metrics = "~{output_dir}/~{sample_name}.alignment_summary_metrics.tsv"
-        File HS_metrics = "~{output_dir}/~{sample_name}.HS_metrics.tsv"
-        File duplicate_metrics = "~{output_dir}/~{sample_name}.duplicate_metrics.tsv"
+        File? HS_metrics = "~{output_dir}/~{sample_name}.HS_metrics.tsv"
+        File? GC_metrics = "~{output_dir}/~{sample_name}.gc_bias_metrics.tsv"
+        File? WGS_metrics = "~{output_dir}/~{sample_name}.wgs_metrics.tsv"
     }
 }
 
@@ -458,7 +460,7 @@ task generate_sample_gvcf {
         # runtime parameters
         Int cpus = 8
         Int memory = 16000
-        String partition = "mediumq"
+        String partition = "covid"
         String time = "2-00:00:00"
         String? rt_additional_parameters
         String? rt_image
@@ -592,7 +594,7 @@ task combine_genotype_gvcfs {
         # runtime parameters
         Int cpus = 4
         Int memory = 16000
-        String partition = "mediumq"
+        String partition = "covid"
         String time = "2-00:00:00"
         String? rt_additional_parameters
         String? rt_image
@@ -668,7 +670,7 @@ task merge_combined_gvcfs {
         # runtime parameters
         Int cpus = 2
         Int memory = 8000
-        String partition = "mediumq"
+        String partition = "covid"
         String time = "2-00:00:00"
         String? rt_additional_parameters
         String? rt_image
@@ -830,7 +832,7 @@ task generate_sample_vcfs {
         # runtime parameters
         Int cpus = 16
         Int memory = 32000
-        String partition = "mediumq"
+        String partition = "covid"
         String time = "2-00:00:00"
         String? rt_additional_parameters
         String? rt_image
