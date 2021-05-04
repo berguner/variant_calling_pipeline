@@ -1,4 +1,6 @@
-sample_name,flowcell,lane,BSF_name,raw_bam,data_source,library,sample_type,target_intervals
-S70158,BSF_0827,1,S70158,S70158_L1.bam,bsf_test,test,germline,/research/lab_bsf/resources/intervals/Twist_Exome_RefSeq_targets_hg38.interval_list
-S70158,BSF_0827,1,S70158,S70158_L2.bam,bsf_test,test,germline,/research/lab_bsf/resources/intervals/Twist_Exome_RefSeq_targets_hg38.interval_list
-S70159,BSF_0827,1,S70159,S70159.bam,bsf_test,test,germline,/research/lab_bsf/resources/intervals/Twist_Exome_RefSeq_targets_hg38.interval_list
+sample_name,flowcell,lane,BSF_name,raw_bam,data_source,library,sample_type,matched_normal,target_intervals,somatic_group,UMI
+NIST,,,,S53670.bam,bsf_test,test,germline,,/research/lab_bsf/resources/intervals/CEMM_Heme_v4_Agilent_20180719_targets_hg38.interval_list,CLL194,no
+S66716,,,,S66716.bam,bsf_test,test,tumor,NIST,/research/lab_bsf/resources/intervals/CEMM_Heme_v4_Agilent_20180719_targets_hg38.interval_list,CLL194,yes
+S66723,,,,S66723.bam,bsf_test,test,tumor,NIST,/research/lab_bsf/resources/intervals/CEMM_Heme_v4_Agilent_20180719_targets_hg38.interval_list,CLL194,yes
+S66731,,,,S66731.bam,bsf_test,test,tumor,,/research/lab_bsf/resources/intervals/CEMM_Heme_v4_Agilent_20180719_targets_hg38.interval_list,CLL194,yes
+S66739,,,,S66739.bam,bsf_test,test,tumor,,/research/lab_bsf/resources/intervals/CEMM_Heme_v4_Agilent_20180719_targets_hg38.interval_list,CLL194,yes
