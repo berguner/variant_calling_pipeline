@@ -214,6 +214,17 @@ workflow variant_calling {
                         gatk_jar = gatk_jar,
                         rt_image = rt_image
                 }
+                call copy_mutect2_results {
+                    input:
+                        sample = sample,
+                        output_vcf_dir = output_vcf_dir,
+                        input_vcf = Mutect2.filtered_vcf,
+                        input_vcf_tbi = Mutect2.filtered_vcf_idx,
+                        filtering_stats = Mutect2.filtering_stats,
+                        mutect_stats = Mutect2.mutect_stats,
+                        contamination_table = Mutect2.contamination_table,
+                        rt_image = rt_image
+                }
             }
         }
     }
@@ -897,6 +908,7 @@ task collect_variant_calling_metrics {
     }
 
     command <<<
+        [ ! -d "~{output_vcf_dir}" ] && mkdir -p ~{output_vcf_dir};
         set -e
         export GATK_LOCAL_JAR=~{default="/gatk/gatk.jar" gatk_jar}
 
@@ -919,5 +931,53 @@ task collect_variant_calling_metrics {
     output {
         File summary_metrics_file = "~{output_vcf_dir}/~{sample.sample_name}.variant_calling_summary_metrics"
         File detail_metrics_file = "~{output_vcf_dir}/~{sample.sample_name}.variant_calling_detail_metrics"
+    }
+}
+
+task copy_mutect2_results {
+    input {
+        Sample sample
+        File input_vcf
+        File input_vcf_tbi
+        File filtering_stats
+        File mutect_stats
+        File? contamination_table
+        String output_vcf_dir
+
+        # runtime parameters
+        Int cpus = 1
+        Int memory = 1000
+        String partition = "tinyq"
+        String time = "2:00:00"
+        String? rt_additional_parameters
+        String? rt_image
+    }
+
+    String copy_contamination_table = if defined(contamination_table) then "cp ~{contamination_table} ~{output_vcf_dir}/~{sample.sample_name}.mutect2_contamination_table ;" else ""
+
+    command <<<
+        [ ! -d "~{output_vcf_dir}" ] && mkdir -p ~{output_vcf_dir};
+        cp ~{input_vcf} ~{output_vcf_dir}/~{sample.sample_name}.vcf.gz ;
+        cp ~{input_vcf_tbi} ~{output_vcf_dir}/~{sample.sample_name}.vcf.gz.tbi ;
+        cp ~{filtering_stats} ~{output_vcf_dir}/~{sample.sample_name}.mutect2_filtering_stats ;
+        cp ~{mutect_stats} ~{output_vcf_dir}/~{sample.sample_name}.mutect2_calling_stats ;
+        ~{copy_contamination_table}
+    >>>
+
+    runtime {
+        rt_cpus: cpus
+        rt_mem: memory
+        rt_queue: partition
+        rt_time: time
+        rt_additional_parameters: rt_additional_parameters
+        rt_image: rt_image
+    }
+
+    output {
+        File copied_vcf = "~{output_vcf_dir}/~{sample.sample_name}.vcf.gz"
+        File copied_vcf_tbi = "~{output_vcf_dir}/~{sample.sample_name}.vcf.gz.tbi"
+        File copied_filtering_stats = "~{output_vcf_dir}/~{sample.sample_name}.mutect2_filtering_stats"
+        File copied_mutect2_stats = "~{output_vcf_dir}/~{sample.sample_name}.mutect2_calling_stats"
+        File? copied_contamination_table = "~{output_vcf_dir}/~{sample.sample_name}.mutect2_contamination_table"
     }
 }
