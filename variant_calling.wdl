@@ -249,7 +249,7 @@ task bwa_align_ubam {
         # runtime parameters
         Int cpus = 8
         Int memory = 16000
-        String partition = "covid"
+        String partition = "mediumq"
         String time = "2-00:00:00"
         String? rt_additional_parameters
         String? rt_image
@@ -377,7 +377,7 @@ task collect_wes_metrics {
         # runtime parameters
         Int cpus = 2
         Int memory = 8000
-        String partition = "covid"
+        String partition = "mediumq"
         String time = "2-00:00:00"
         String? rt_additional_parameters
         String? rt_image
@@ -471,7 +471,7 @@ task generate_sample_gvcf {
         # runtime parameters
         Int cpus = 8
         Int memory = 16000
-        String partition = "covid"
+        String partition = "mediumq"
         String time = "2-00:00:00"
         String? rt_additional_parameters
         String? rt_image
@@ -605,7 +605,7 @@ task combine_genotype_gvcfs {
         # runtime parameters
         Int cpus = 4
         Int memory = 16000
-        String partition = "covid"
+        String partition = "mediumq"
         String time = "2-00:00:00"
         String? rt_additional_parameters
         String? rt_image
@@ -681,7 +681,7 @@ task merge_combined_gvcfs {
         # runtime parameters
         Int cpus = 2
         Int memory = 8000
-        String partition = "covid"
+        String partition = "mediumq"
         String time = "2-00:00:00"
         String? rt_additional_parameters
         String? rt_image
@@ -843,7 +843,7 @@ task generate_sample_vcfs {
         # runtime parameters
         Int cpus = 16
         Int memory = 32000
-        String partition = "covid"
+        String partition = "mediumq"
         String time = "2-00:00:00"
         String? rt_additional_parameters
         String? rt_image
