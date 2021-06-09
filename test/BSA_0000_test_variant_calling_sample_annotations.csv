@@ -4,3 +4,4 @@ S66716,,,,S66716.bam,bsf_test,test,tumor,NIST,/research/lab_bsf/resources/interv
 S66723,,,,S66723.bam,bsf_test,test,tumor,NIST,/research/lab_bsf/resources/intervals/CEMM_Heme_v4_Agilent_20180719_targets_hg38.interval_list,CLL194,yes
 S66731,,,,S66731.bam,bsf_test,test,tumor,,/research/lab_bsf/resources/intervals/CEMM_Heme_v4_Agilent_20180719_targets_hg38.interval_list,CLL194,yes
 S66739,,,,S66739.bam,bsf_test,test,tumor,,/research/lab_bsf/resources/intervals/CEMM_Heme_v4_Agilent_20180719_targets_hg38.interval_list,CLL194,yes
+S83932,,,,S83932.bam,bsf_test,test,germline,,/research/lab_bsf/resources/intervals/CEMM_Heme_v4_Agilent_20180719_targets_hg38.interval_list,CLL127,yes
