@@ -120,7 +120,6 @@ workflow variant_calling {
                 rt_image = rt_image
         }
 
-        if(length(generate_sample_gvcf.output_gvcf) > 0) {
             Array[String?] my_gvcfs = generate_sample_gvcf.output_gvcf
             scatter(interval_file in split_intervals.interval_files) {
                 call combine_genotype_gvcfs {
@@ -134,47 +133,47 @@ workflow variant_calling {
                         dbsnp_idx = dbsnp_idx,
                         gatk_jar = gatk_jar,
                         output_dir = output_dir,
-                        input_gvcfs = my_gvcfs,
+                        input_gvcfs =  generate_sample_gvcf.output_gvcf,
                         rt_image = rt_image
                 }
             }
-        }
 
-        call merge_combined_gvcfs {
-            input:
-                output_dir = output_dir,
-                project_name = project_name,
-                ref_dict = ref_dict,
-                gatk_jar = gatk_jar,
-                input_gvcfs = combine_genotype_gvcfs.combined_gvcf,
-                input_gvcf_tbis = combine_genotype_gvcfs.combined_gvcf_tbi,
-                input_vcfs = combine_genotype_gvcfs.genotyped_vcf,
-                input_vcf_tbis = combine_genotype_gvcfs.genotyped_vcf_tbi,
-                rt_image = rt_image
-        }
 
-        String output_vcf_dir = "~{output_dir}/vcf"
-        call annotate_vcf_vep {
-            input:
-                output_vcf_dir = output_vcf_dir,
-                input_vcf = merge_combined_gvcfs.cohort_vcf,
-                input_vcf_tbi = merge_combined_gvcfs.cohort_vcf_tbi
-        }
-
-        if(generate_germline_sample_vcfs == "yes") {
-            call generate_sample_vcfs {
+            call merge_combined_gvcfs {
                 input:
-                    output_vcf_dir = output_vcf_dir,
-                    input_vcf = annotate_vcf_vep.annotated_vcf,
-                    input_vcf_tbi = annotate_vcf_vep.annotated_vcf_tbi,
-                    dbsnp_vcf = dbsnp_vcf,
-                    dbsnp_vcf_tbi = dbsnp_idx,
+                    output_dir = output_dir,
+                    project_name = project_name,
+                    ref_dict = ref_dict,
                     gatk_jar = gatk_jar,
+                    input_gvcfs = combine_genotype_gvcfs.combined_gvcf,
+                    input_gvcf_tbis = combine_genotype_gvcfs.combined_gvcf_tbi,
+                    input_vcfs = combine_genotype_gvcfs.genotyped_vcf,
+                    input_vcf_tbis = combine_genotype_gvcfs.genotyped_vcf_tbi,
                     rt_image = rt_image
             }
-        }
-    }
 
+            String output_vcf_dir = "~{output_dir}/vcf"
+            call annotate_vcf_vep {
+                input:
+                    output_vcf_dir = output_vcf_dir,
+                    input_vcf = merge_combined_gvcfs.cohort_vcf,
+                    input_vcf_tbi = merge_combined_gvcfs.cohort_vcf_tbi
+            }
+
+            if(generate_germline_sample_vcfs == "yes") {
+                call generate_sample_vcfs {
+                    input:
+                        output_vcf_dir = output_vcf_dir,
+                        input_vcf = annotate_vcf_vep.annotated_vcf,
+                        input_vcf_tbi = annotate_vcf_vep.annotated_vcf_tbi,
+                        dbsnp_vcf = dbsnp_vcf,
+                        dbsnp_vcf_tbi = dbsnp_idx,
+                        gatk_jar = gatk_jar,
+                        rt_image = rt_image
+                }
+            }
+
+    }
     if(perform_somatic_variant_calling == "yes") {
         scatter(sample in bwa_align_ubam.processed_sample) {
             if(sample.sample_type == "tumor") {
@@ -569,7 +568,7 @@ task split_intervals {
         mkdir interval-files
         gatk --java-options "-Xmx2g" SplitIntervals \
         -R ~{ref_fasta} \
-        ~{"-L" + intervals} \
+        ~{"-L " + intervals} \
         -scatter ~{scatter_count} \
         -O interval-files
         cp interval-files/*.interval_list .
@@ -615,7 +614,6 @@ task combine_genotype_gvcfs {
     String combined_gvcf_dir = "~{output_dir}/gvcf/combined_gvcf"
     String BN = basename("~{interval_file}")
     String interval_name = sub(BN, "\\.interval_list$", "")
-    String gvcf_files = "~{input_gvcfs}"
 
     command <<<
         [ ! -d "~{combined_gvcf_dir}" ] && mkdir -p ~{combined_gvcf_dir};
@@ -625,8 +623,10 @@ task combine_genotype_gvcfs {
 
         ### This is a temporary solution to avaoid the cromwell error:
         ### cannot interpolate Array[File?] into a command string with attribute set
-        VAR_FILES=`echo "~{gvcf_files}" |  tr '[' ' ' | tr ']' ' ' | sed 's/, / -V /g'`
-        ###
+        VAR_FILES=""
+        for i in ~{output_dir}/gvcf/*.g.vcf.gz; do
+            VAR_FILES=" -V $i $VAR_FILES"
+        done
 
         gatk --java-options "-Xmx12g -Xms128m -Djava.io.tmpdir:~{combined_gvcf_dir} -d64" \
             CombineGVCFs \
@@ -635,7 +635,7 @@ task combine_genotype_gvcfs {
             -O "~{combined_gvcf_dir}/~{interval_name}.g.vcf.gz"  \
             -R ~{ref_fasta} \
             --sequence-dictionary ~{ref_dict} \
-            -V $VAR_FILES > "~{combined_gvcf_dir}/~{interval_name}.g.vcf.gz.log" 2>&1
+            $VAR_FILES > "~{combined_gvcf_dir}/~{interval_name}.g.vcf.gz.log" 2>&1
 
         gatk --java-options "-Xmx12g -Xms128m -Djava.io.tmpdir:~{combined_gvcf_dir} -d64" \
             GenotypeGVCFs \
