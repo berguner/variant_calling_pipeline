@@ -57,4 +57,5 @@ def variant_calling_report_execution_start():
     os.chdir(report_dir)
     for folder in ['bam', 'vcf', 'relatedness', 'mutect2']:
         if os.path.exists(os.path.join(config.project_path, config.genome_version, folder)) and not os.path.islink(os.path.join(report_dir, folder)):
-            os.symlink(os.path.join(config.project_path, config.genome_version, folder), os.path.join(report_dir, folder))
+            relative_path = os.path.relpath(os.path.join(config.project_path, config.genome_version, folder), os.curdir)
+            os.symlink(relative_path, os.path.join(report_dir, folder))
