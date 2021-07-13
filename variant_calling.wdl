@@ -71,14 +71,23 @@ workflow variant_calling {
                 ref_pac = ref_pac,
                 ref_sa = ref_sa,
                 output_dir = output_dir,
-                gatk_jar = gatk_jar,
-                genome_version = genome_version,
                 rt_image = rt_image,
                 tools_folder = tools_folder
         }
+
+        call markduplicates {
+            input:
+                sample = bwa_align_ubam.processed_sample,
+                aligned_bam = bwa_align_ubam.output_bam,
+                ref_fasta = ref_fasta,
+                ref_fai = ref_fai,
+                genome_version = genome_version,
+                output_dir = output_dir,
+                rt_image = rt_image
+        }
     }
 
-    scatter(sample in bwa_align_ubam.processed_sample) {
+    scatter(sample in markduplicates.processed_sample) {
         call collect_wes_metrics {
             input:
                 sample = sample,
@@ -91,7 +100,7 @@ workflow variant_calling {
     }
 
     if(perform_germline_variant_calling == "yes") {
-        scatter(sample in bwa_align_ubam.processed_sample) {
+        scatter(sample in markduplicates.processed_sample) {
             if(sample.sample_type == "germline") {
                 call generate_sample_gvcf {
                     input:
@@ -175,7 +184,7 @@ workflow variant_calling {
 
     }
     if(perform_somatic_variant_calling == "yes") {
-        scatter(sample in bwa_align_ubam.processed_sample) {
+        scatter(sample in markduplicates.processed_sample) {
             if(sample.sample_type == "tumor") {
                 File tumor_bam = "~{output_dir}/bam/~{sample.sample_name}.bam"
                 File tumor_bai = "~{output_dir}/bam/~{sample.sample_name}.bam.bai"
@@ -240,9 +249,7 @@ task bwa_align_ubam {
         File ref_bwt
         File ref_pac
         File ref_sa
-        String? gatk_jar
         Sample sample
-        String genome_version
         String tools_folder
 
         # runtime parameters
@@ -261,64 +268,80 @@ task bwa_align_ubam {
     String RG = "@RG\\tID:~{sample.sample_name}\\tSM:~{sample.sample_name}\\tPL:illumina\\tLB:~{sample.library}"
     String samtools_fastq = if (sample.UMI == "yes") then "samtools fastq -n -T 'RX,QX' " else "samtools fastq -n "
     String move_umi = if (sample.UMI == "yes") then "python3 ~{tools_folder}/move_umi_to_tag.py |" else ""
-    String mark_duplicates_method = if (sample.UMI == "yes") then "UmiAwareMarkDuplicatesWithMateCigar --UMI_METRICS ~{bam_dir}/~{sample.sample_name}.umi_metrics.tsv" else "MarkDuplicates"
     command <<<
         [ ! -d "~{output_dir}" ] && mkdir -p ~{output_dir};
         [ ! -d "~{bam_dir}" ] && mkdir -p ~{bam_dir};
 
-        # Run alignment if the output_bam file does not exist
-        if [[ ! -f "~{bam_dir}/~{sample.sample_name}.bam" && ! -f "~{bam_dir}/~{sample.sample_name}.aligned.bam" ]]; then
-            # Set this for enabling summation of return codes from the piped commands
-            set -o pipefail
+        # Set this for enabling summation of return codes from the piped commands
+        set -o pipefail
 
-            for i in ~{raw_bams}; do ~{samtools_fastq} $i 2>> "~{bam_dir}/~{sample.sample_name}.samtools.log" ; done | \
-                awk '{ if(NR % 4 == 1) gsub("\t", "", $0); print $0}' | \
-                bwa mem -t ~{cpus} -R "~{RG}" -p ~{ref_fasta} - 2> "~{bam_dir}/~{sample.sample_name}.bwa.log" | ~{move_umi} \
-                samtools fixmate -O SAM - - 2>> "~{bam_dir}/~{sample.sample_name}.samtools.log" | \
-                samtools sort -m 1024m -@ ~{cpus / 2} -o "~{bam_dir}/~{sample.sample_name}.aligned.bam" - 2>> "~{bam_dir}/~{sample.sample_name}.samtools.log"
+        for i in ~{raw_bams}; do ~{samtools_fastq} $i 2>> "~{bam_dir}/~{sample.sample_name}.samtools.log" ; done | \
+            awk '{ if(NR % 4 == 1) gsub("\t", "", $0); print $0}' | \
+            bwa mem -t ~{cpus} -R "~{RG}" -p ~{ref_fasta} - 2> "~{bam_dir}/~{sample.sample_name}.bwa.log" | ~{move_umi} \
+            samtools fixmate -O SAM - - 2>> "~{bam_dir}/~{sample.sample_name}.samtools.log" | \
+            samtools sort -m 1024m -@ ~{cpus / 2} -o "~{bam_dir}/~{sample.sample_name}.aligned.bam" - 2>> "~{bam_dir}/~{sample.sample_name}.samtools.log"
 
-            # Continue if nothing had failed during the alignment step
-            if [ $? -eq "0" ]; then
-                set -e
-                export GATK_LOCAL_JAR=~{default="/gatk/gatk.jar" gatk_jar}
+    >>>
 
-                gatk --java-options "-Djava.io.tmpdir=~{output_dir} -Xmx8g" ~{mark_duplicates_method} \
-                    -I "~{bam_dir}/~{sample.sample_name}.aligned.bam" \
-                    -M "~{bam_dir}/~{sample.sample_name}.duplicate_metrics.tsv" \
-                    -O "~{bam_dir}/~{sample.sample_name}.bam" \
-                    --OPTICAL_DUPLICATE_PIXEL_DISTANCE 10000 \
-                    --ASSUME_SORTED true \
-                    --CREATE_INDEX true \
-                    > "~{bam_dir}/~{sample.sample_name}.markduplicates.log" 2>&1;
+    runtime {
+        rt_cpus: cpus
+        rt_mem: memory
+        rt_queue: partition
+        rt_time: time
+        rt_additional_parameters: rt_additional_parameters
+        rt_image: rt_image
+    }
 
-                # Remove temporary aligned.bam file
-                if [ $? -eq "0" ]; then
-                    rm "~{bam_dir}/~{sample.sample_name}.aligned.bam";
-                    mv "~{bam_dir}/~{sample.sample_name}.bai" "~{bam_dir}/~{sample.sample_name}.bam.bai";
-                fi
-            fi
-        fi
+    output {
+        File output_bam = "~{bam_dir}/~{sample.sample_name}.aligned.bam"
+        Sample processed_sample = sample
+    }
+}
 
-        # Run only the markduplicates if both sample.bam and sample.aligned.bam exist.
-        if [[ -f "~{bam_dir}/~{sample.sample_name}.bam" && -f "~{bam_dir}/~{sample.sample_name}.aligned.bam" ]]; then
-            rm "~{bam_dir}/~{sample.sample_name}.bam"
-            set -e
-            export GATK_LOCAL_JAR=~{default="/gatk/gatk.jar" gatk_jar}
+task markduplicates {
+    input {
+        String output_dir
+        File aligned_bam
+        File ref_fasta
+        File ref_fai
+        String? gatk_jar
+        Sample sample
+        String genome_version
 
-            gatk --java-options "-Djava.io.tmpdir=~{output_dir} -Xmx8g" ~{mark_duplicates_method} \
-                -I "~{bam_dir}/~{sample.sample_name}.aligned.bam" \
-                -M "~{bam_dir}/~{sample.sample_name}.duplicate_metrics.tsv" \
-                -O "~{bam_dir}/~{sample.sample_name}.bam" \
-                --OPTICAL_DUPLICATE_PIXEL_DISTANCE 10000 \
-                --ASSUME_SORTED true \
-                --CREATE_INDEX true \
-                > "~{bam_dir}/~{sample.sample_name}.markduplicates.log" 2>&1;
+        # runtime parameters
+        Int cpus = 2
+        Int memory = 8000
+        String partition = "mediumq"
+        String time = "2-00:00:00"
+        String? rt_additional_parameters
+        String? rt_image
+    }
 
-            # Remove temporary aligned.bam file
-            if [ $? -eq "0" ]; then
-                rm "~{bam_dir}/~{sample.sample_name}.aligned.bam";
-                mv "~{bam_dir}/~{sample.sample_name}.bai" "~{bam_dir}/~{sample.sample_name}.bam.bai";
-            fi
+    # bam_dir would be /project_path/genome_version/bam
+    String bam_dir = "~{output_dir}/bam"
+    String mark_duplicates_method = if (sample.UMI == "yes") then "UmiAwareMarkDuplicatesWithMateCigar --UMI_METRICS ~{bam_dir}/~{sample.sample_name}.umi_metrics.tsv" else "MarkDuplicates"
+    Int mark_duplicates_memory = memory - 2000
+
+    command <<<
+        [ ! -d "~{output_dir}" ] && mkdir -p ~{output_dir};
+        [ ! -d "~{bam_dir}" ] && mkdir -p ~{bam_dir};
+
+        set -e
+        export GATK_LOCAL_JAR=~{default="/gatk/gatk.jar" gatk_jar}
+
+        gatk --java-options "-Djava.io.tmpdir=~{output_dir} -Xmx~{mark_duplicates_memory}m" ~{mark_duplicates_method} \
+            -I ~{aligned_bam} \
+            -M "~{bam_dir}/~{sample.sample_name}.duplicate_metrics.tsv" \
+            -O "~{bam_dir}/~{sample.sample_name}.bam" \
+            --OPTICAL_DUPLICATE_PIXEL_DISTANCE 10000 \
+            --ASSUME_SORTED true \
+            --CREATE_INDEX true \
+            > "~{bam_dir}/~{sample.sample_name}.markduplicates.log" 2>&1;
+
+        # Remove temporary aligned.bam file
+        if [ $? -eq "0" ]; then
+            rm "~{bam_dir}/~{sample.sample_name}.aligned.bam";
+            mv "~{bam_dir}/~{sample.sample_name}.bai" "~{bam_dir}/~{sample.sample_name}.bam.bai";
         fi
 
         # Infer sex
@@ -346,7 +369,8 @@ task bwa_align_ubam {
         else
             echo "~{sample.sample_name}: FEMALE" > $SEX_FILE;
         fi
-    >>>
+
+        >>>
 
     runtime {
         rt_cpus: cpus
