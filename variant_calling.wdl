@@ -274,13 +274,17 @@ task bwa_align_ubam {
 
         # Set this for enabling summation of return codes from the piped commands
         set -o pipefail
+        if [ ! -f "~{bam_dir}/~{sample.sample_name}.alignment_completed.txt" ]; then
+            for i in ~{raw_bams}; do ~{samtools_fastq} $i 2>> "~{bam_dir}/~{sample.sample_name}.samtools.log" ; done | \
+                awk '{ if(NR % 4 == 1) gsub("\t", "", $0); print $0}' | \
+                bwa mem -t ~{cpus} -R "~{RG}" -p ~{ref_fasta} - 2> "~{bam_dir}/~{sample.sample_name}.bwa.log" | ~{move_umi} \
+                samtools fixmate -O SAM - - 2>> "~{bam_dir}/~{sample.sample_name}.samtools.log" | \
+                samtools sort -m 1024m -@ ~{cpus / 2} -o "~{bam_dir}/~{sample.sample_name}.aligned.bam" - 2>> "~{bam_dir}/~{sample.sample_name}.samtools.log"
+        fi
 
-        for i in ~{raw_bams}; do ~{samtools_fastq} $i 2>> "~{bam_dir}/~{sample.sample_name}.samtools.log" ; done | \
-            awk '{ if(NR % 4 == 1) gsub("\t", "", $0); print $0}' | \
-            bwa mem -t ~{cpus} -R "~{RG}" -p ~{ref_fasta} - 2> "~{bam_dir}/~{sample.sample_name}.bwa.log" | ~{move_umi} \
-            samtools fixmate -O SAM - - 2>> "~{bam_dir}/~{sample.sample_name}.samtools.log" | \
-            samtools sort -m 1024m -@ ~{cpus / 2} -o "~{bam_dir}/~{sample.sample_name}.aligned.bam" - 2>> "~{bam_dir}/~{sample.sample_name}.samtools.log"
-
+        if [ ! -f "~{bam_dir}/~{sample.sample_name}.aligned.bam" ]; then
+            touch "~{bam_dir}/~{sample.sample_name}.aligned.bam"
+        fi
     >>>
 
     runtime {
@@ -329,19 +333,25 @@ task markduplicates {
         set -e
         export GATK_LOCAL_JAR=~{default="/gatk/gatk.jar" gatk_jar}
 
-        gatk --java-options "-Djava.io.tmpdir=~{output_dir} -Xmx~{mark_duplicates_memory}m" ~{mark_duplicates_method} \
-            -I ~{aligned_bam} \
-            -M "~{bam_dir}/~{sample.sample_name}.duplicate_metrics.tsv" \
-            -O "~{bam_dir}/~{sample.sample_name}.bam" \
-            --OPTICAL_DUPLICATE_PIXEL_DISTANCE 10000 \
-            --ASSUME_SORTED true \
-            --CREATE_INDEX true \
-            > "~{bam_dir}/~{sample.sample_name}.markduplicates.log" 2>&1;
+        if [ ! -f "~{bam_dir}/~{sample.sample_name}.markdup_completed.txt" ]; then
+            gatk --java-options "-Djava.io.tmpdir=~{output_dir} -Xmx~{mark_duplicates_memory}m" ~{mark_duplicates_method} \
+                -I ~{aligned_bam} \
+                -M "~{bam_dir}/~{sample.sample_name}.duplicate_metrics.tsv" \
+                -O "~{bam_dir}/~{sample.sample_name}.bam" \
+                --OPTICAL_DUPLICATE_PIXEL_DISTANCE 10000 \
+                --ASSUME_SORTED true \
+                --CREATE_INDEX true \
+                > "~{bam_dir}/~{sample.sample_name}.markduplicates.log" 2>&1;
+            # Remove temporary aligned.bam file
+            if [ $? -eq "0" ]; then
+                rm "~{bam_dir}/~{sample.sample_name}.aligned.bam";
+                mv "~{bam_dir}/~{sample.sample_name}.bai" "~{bam_dir}/~{sample.sample_name}.bam.bai";
+                touch "~{bam_dir}/~{sample.sample_name}.markdup_completed.txt"
+            fi
+        fi
 
-        # Remove temporary aligned.bam file
-        if [ $? -eq "0" ]; then
+        if [[ -f "~{bam_dir}/~{sample.sample_name}.markdup_completed.txt" && -f "~{bam_dir}/~{sample.sample_name}.aligned.bam" ]]; then
             rm "~{bam_dir}/~{sample.sample_name}.aligned.bam";
-            mv "~{bam_dir}/~{sample.sample_name}.bai" "~{bam_dir}/~{sample.sample_name}.bam.bai";
         fi
 
         # Infer sex
