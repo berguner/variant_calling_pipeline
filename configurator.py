@@ -155,3 +155,5 @@ if __name__ == '__main__':
     project_json = os.path.join(json_path, '{}.inputs.json'.format(config['project_name']))
     with open(project_json, 'w') as output:
         json.dump(inputs_dict, output, indent=2)
+
+    print("\nProject output folder:\n{}".format(project_path))
