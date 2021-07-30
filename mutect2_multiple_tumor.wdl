@@ -1,6 +1,6 @@
 version 1.0
 
-workflow mutect2_multi_sample {
+workflow mutect2_multiple_tumor {
     input {
         String patient_name
         String root_dir
@@ -73,10 +73,6 @@ task mutect2 {
         File ref_fasta
         File ref_fai
         File ref_dict
-        #Array[File] tumor_reads
-        #Array[File] tumor_reads_index
-        #File? normal_reads
-        #File? normal_reads_index
         String tumor_samples
         String normal_sample
         File? pon
@@ -125,7 +121,7 @@ task mutect2 {
 
         IFS=',' read -ra TUMOR_LIST <<< "~{tumor_samples}"
         TUMOR_INPUT=""
-        for i in "${TUMOR_LIST[@]}"; do TUMOR_INPUT="${TUMOR_INPUT} -I ~{root_dir}/bam/${i}.bam -tumor ${i}" ; done
+        for i in "${TUMOR_LIST[@]}"; do TUMOR_INPUT="${TUMOR_INPUT} -I ~{root_dir}/bam/${i}.bam" ; done
 
         for interval_file in ~{output_dir}/*.interval_list; do
             BN=$(basename $interval_file);
@@ -198,10 +194,11 @@ task mutect2 {
             gatk --java-options "-Xmx3g -Xms128m -Djava.io.tmpdir:~{output_dir} -d64" GatherPileupSummaries \
                 --sequence-dictionary ~{ref_dict} \
                 ${PILEUPS}\
-                -O ~{output_dir}/${T}.pileups.table
+                -O ~{output_dir}/${T}.pileups.table \
+                > ~{output_dir}/${T}.pileups.table.log 2>&1;
         done
 
-        if [[ ! -z "~{normal_input}" ]]; then
+        if [[ ! -z "~{normal_sample}" ]]; then
             T="~{normal_sample}"
             for interval_file in ~{output_dir}/*.interval_list; do
                 BN=$(basename $interval_file);
@@ -221,15 +218,52 @@ task mutect2 {
             for interval_file in ~{output_dir}/*.interval_list; do
                 BN=$(basename $interval_file);
                 interval_name=${BN/.interval_list/};
-                PILEUPS="${PILEUPS} -I ~{output_dir}/${T}.${interval_name}.pileups.table"
+                PILEUPS="${PILEUPS} -I ~{output_dir}/${T}.${interval_name}.pileups.table";
             done
 
             gatk --java-options "-Xmx3g -Xms128m -Djava.io.tmpdir:~{output_dir} -d64" GatherPileupSummaries \
                 --sequence-dictionary ~{ref_dict} \
                 ${PILEUPS}\
-                -O ~{output_dir}/${T}.pileups.table
+                -O ~{output_dir}/${T}.pileups.table \
+                > ~{output_dir}/${T}.pileups.table.log 2>&1;
         fi
 
+        ### CalculateContamination
+        NORMAL_PILEUPS=""
+        if [[ ! -z "~{normal_sample}" ]]; then
+            NORMAL_PILEUPS="-matched ~{output_dir}/~{normal_sample}.pileups.table"
+        fi
+        CONTAMINTAION_TABLES=""
+        for T in "${TUMOR_LIST[@]}"; do
+            gatk --java-options "-Xmx3g -Xms128m -Djava.io.tmpdir:~{output_dir} -d64" CalculateContamination  \
+                -I ~{output_dir}/${T}.pileups.table \
+                ${NORMAL_PILEUPS} \
+                -O ~{output_dir}/${T}.contamination.table \
+                > ~{output_dir}/${T}.contamination.table.log 2>&1;
+            CONTAMINTAION_TABLES="${CONTAMINTAION_TABLES} --contamination-table ~{output_dir}/${T}.contamination.table"
+        done
+
+        ### LearnReadOrientationModel
+        F1R2_COUNTS=""
+        for i in ~{output_dir}/*.f1r2.tar.gz; do F1R2_COUNTS="${F1R2_COUNTS} -I ${i}"; done
+        gatk --java-options "-Xmx3g -Xms128m -Djava.io.tmpdir:~{output_dir} -d64" LearnReadOrientationModel \
+            ${F1R2_COUNTS} \
+            -O "~{output_dir}/artifact-priors.tar.gz" \
+            > "~{output_dir}/artifact-priors.tar.gz.log" 2>&1;
+
+        ### FilterMutectCalls
+        gatk --java-options "-Xmx3g -Xms128m -Djava.io.tmpdir:~{output_dir} -d64" FilterMutectCalls \
+            -V ~{output_dir}/~{patient_name}.raw.vcf.gz \
+            -R ~{ref_fasta} \
+            -O ~{output_dir}/~{patient_name}.vcf.gz \
+            ${CONTAMINTAION_TABLES} \
+            --ob-priors ~{output_dir}/artifact-priors.tar.gz \
+            -stats ~{output_dir}/~{patient_name}.merged.stats \
+            --filtering-stats ~{output_dir}/~{patient_name}.filtering.stats
+            > ~{output_dir}/~{patient_name}.filtering.log 2>&1;
+        
+        ## Clean up
+        rm ~{output_dir}/*-scattered*
     >>>
 
     runtime {
