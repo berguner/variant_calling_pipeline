@@ -274,17 +274,21 @@ task bwa_align_ubam {
 
         # Set this for enabling summation of return codes from the piped commands
         set -o pipefail
-        if [ ! -f "~{bam_dir}/~{sample.sample_name}.alignment_completed.txt" ]; then
+        pipe_returned=0
+        if [[ ! -f "~{bam_dir}/~{sample.sample_name}.aligned.bam" && ! -f "~{bam_dir}/~{sample.sample_name}.bam.bai" ]]; then
             for i in ~{raw_bams}; do ~{samtools_fastq} $i 2>> "~{bam_dir}/~{sample.sample_name}.samtools.log" ; done | \
                 awk '{ if(NR % 4 == 1) gsub("\t", "", $0); print $0}' | \
                 bwa mem -t ~{cpus} -R "~{RG}" -p ~{ref_fasta} - 2> "~{bam_dir}/~{sample.sample_name}.bwa.log" | ~{move_umi} \
                 samtools fixmate -O SAM - - 2>> "~{bam_dir}/~{sample.sample_name}.samtools.log" | \
                 samtools sort -m 1024m -@ ~{cpus / 2} -o "~{bam_dir}/~{sample.sample_name}.aligned.bam" - 2>> "~{bam_dir}/~{sample.sample_name}.samtools.log"
+            pipe_returned=$?
         fi
 
         if [ ! -f "~{bam_dir}/~{sample.sample_name}.aligned.bam" ]; then
             touch "~{bam_dir}/~{sample.sample_name}.aligned.bam"
         fi
+
+        exit $pipe_returned
     >>>
 
     runtime {
@@ -333,7 +337,7 @@ task markduplicates {
         set -e
         export GATK_LOCAL_JAR=~{default="/gatk/gatk.jar" gatk_jar}
 
-        if [ ! -f "~{bam_dir}/~{sample.sample_name}.markdup_completed.txt" ]; then
+        if [ ! -f "~{bam_dir}/~{sample.sample_name}.bam.bai" ]; then
             gatk --java-options "-Djava.io.tmpdir=~{output_dir} -Xmx~{mark_duplicates_memory}m" ~{mark_duplicates_method} \
                 -I ~{aligned_bam} \
                 -M "~{bam_dir}/~{sample.sample_name}.duplicate_metrics.tsv" \
@@ -346,11 +350,10 @@ task markduplicates {
             if [ $? -eq "0" ]; then
                 rm "~{bam_dir}/~{sample.sample_name}.aligned.bam";
                 mv "~{bam_dir}/~{sample.sample_name}.bai" "~{bam_dir}/~{sample.sample_name}.bam.bai";
-                touch "~{bam_dir}/~{sample.sample_name}.markdup_completed.txt"
             fi
         fi
 
-        if [[ -f "~{bam_dir}/~{sample.sample_name}.markdup_completed.txt" && -f "~{bam_dir}/~{sample.sample_name}.aligned.bam" ]]; then
+        if [[ -f "~{bam_dir}/~{sample.sample_name}.bam.bai" && -f "~{bam_dir}/~{sample.sample_name}.aligned.bam" ]]; then
             rm "~{bam_dir}/~{sample.sample_name}.aligned.bam";
         fi
 
@@ -408,8 +411,8 @@ task collect_wes_metrics {
         String? gatk_jar
 
         # runtime parameters
-        Int cpus = 2
-        Int memory = 8000
+        Int cpus = 4
+        Int memory = 16000
         String partition = "mediumq"
         String time = "2-00:00:00"
         String? rt_additional_parameters
@@ -421,58 +424,61 @@ task collect_wes_metrics {
     File bai = "~{output_dir}/~{sample.sample_name}.bam.bai"
     String sample_name = "~{sample.sample_name}"
 
-    command {
+    command <<<
         # Run each step unless the output files are there
         set -e
         # Assume WGS if target intervals file was not provided
         export TARGET_INTERVALS=~{default="NULL" sample.target_intervals}
         export GATK_LOCAL_JAR=~{default="/gatk/gatk.jar" gatk_jar}
+        COMMANDS=""
         if [ ! -f "~{output_dir}/~{sample_name}.insert_size_metrics.tsv" ]; then
-            gatk --java-options "-Xmx4g" CollectInsertSizeMetrics \
+            COMMANDS="${COMMANDS}gatk --java-options \"-Xmx3g\" CollectInsertSizeMetrics \
                 -R ~{ref_fasta} \
                 -I ~{bam} \
                 -H ~{output_dir}/~{sample_name}.insert_size_metrics.pdf \
                 -O ~{output_dir}/~{sample_name}.insert_size_metrics.tsv \
-                > ~{output_dir}/~{sample_name}.insert_size_metrics.log 2>&1;
+                > ~{output_dir}/~{sample_name}.insert_size_metrics.log 2>&1;\n"
         fi
 
         if [ ! -f "~{output_dir}/~{sample_name}.alignment_summary_metrics.tsv" ]; then
-            gatk --java-options "-Xmx4g" CollectAlignmentSummaryMetrics \
+            COMMANDS="${COMMANDS}gatk --java-options \"-Xmx3g\" CollectAlignmentSummaryMetrics \
                 -R ~{ref_fasta} \
                 -I ~{bam} \
                 -O ~{output_dir}/~{sample_name}.alignment_summary_metrics.tsv \
-                > ~{output_dir}/~{sample_name}.alignment_summary_metrics.log 2>&1;
+                > ~{output_dir}/~{sample_name}.alignment_summary_metrics.log 2>&1;\n"
         fi
 
         if [[ ! -f "~{output_dir}/~{sample_name}.HS_metrics.tsv" && "$TARGET_INTERVALS" != "NULL" ]]; then
-            gatk --java-options "-Xmx4g" CollectHsMetrics \
+            COMMANDS="${COMMANDS}gatk --java-options \"-Xmx3g\" CollectHsMetrics \
                 -R ~{ref_fasta} \
                 -I ~{bam} \
                 --BAIT_INTERVALS ~{sample.target_intervals} \
                 --TARGET_INTERVALS ~{sample.target_intervals} \
                 -O ~{output_dir}/~{sample_name}.HS_metrics.tsv \
-                > ~{output_dir}/~{sample_name}.HS_metrics.log 2>&1;
+                > ~{output_dir}/~{sample_name}.HS_metrics.log 2>&1;\n"
         fi
 
         if [[ ! -f "~{output_dir}/~{sample_name}.gc_bias_metrics.tsv" && "$TARGET_INTERVALS" == "NULL" ]]; then
-            gatk --java-options "-Xmx4g" CollectGcBiasMetrics \
+            COMMANDS="${COMMANDS}gatk --java-options \"-Xmx3g\" CollectGcBiasMetrics \
                 -R ~{ref_fasta} \
                 -I ~{bam} \
                 --CHART_OUTPUT ~{output_dir}/~{sample_name}.gc_bias_metrics.pdf \
                 --SUMMARY_OUTPUT ~{output_dir}/~{sample_name}.gc_summary_metrics.tsv \
                 -O ~{output_dir}/~{sample_name}.gc_bias_metrics.tsv \
-                > ~{output_dir}/~{sample_name}.gc_bias_metrics.log 2>&1;
+                > ~{output_dir}/~{sample_name}.gc_bias_metrics.log 2>&1;\n"
         fi
 
         if [[ ! -f "~{output_dir}/~{sample_name}.wgs_metrics.tsv" && "$TARGET_INTERVALS" == "NULL" ]]; then
-            gatk --java-options "-Xmx4g" CollectWgsMetrics \
+            COMMANDS="${COMMANDS}gatk --java-options \"-Xmx3g\" CollectWgsMetrics \
                 -R ~{ref_fasta} \
                 -I ~{bam} \
                 -O ~{output_dir}/~{sample_name}.wgs_metrics.tsv \
-                > ~{output_dir}/~{sample_name}.wgs_metrics.log 2>&1;
+                > ~{output_dir}/~{sample_name}.wgs_metrics.log 2>&1;\n"
         fi
 
-    }
+        echo -e ${COMMANDS} | parallel --no-notice -j ~{cpus}
+
+    >>>
     runtime {
         rt_cpus: cpus
         rt_mem: memory
