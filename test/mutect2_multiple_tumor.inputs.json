@@ -8,6 +8,7 @@
 	"mutect2_multiple_tumor.ref_dict":"/nobackup/lab_bsf/resources/GATK/hg38/v0/Homo_sapiens_assembly38.dict",
 	"mutect2_multiple_tumor.tumor_samples":"S66716,S66723,S66731,S66739",
 	"mutect2_multiple_tumor.normal_sample":"NIST",
+	"mutect2_multiple_tumor.m2_extra_args": "--genotype-germline-sites true",
 	
 	"mutect2_multiple_tumor.variants_for_contamination":"/nobackup/lab_bsf/resources/GATK/hg38/gatk-best-practices/somatic-hg38/small_exac_common_3.hg38.vcf.gz",
 	"mutect2_multiple_tumor.variants_for_contamination_idx":"/nobackup/lab_bsf/resources/GATK/hg38/gatk-best-practices/somatic-hg38/small_exac_common_3.hg38.vcf.gz.tbi",
@@ -16,6 +17,16 @@
 	"mutect2_multiple_tumor.pon": "/research/lab_bsf/resources/wgs_panel_of_normal_hg38.vcf.gz",
 	"mutect2_multiple_tumor.pon_idx": "/research/lab_bsf/resources/wgs_panel_of_normal_hg38.vcf.gz.tbi",
 	"mutect2_multiple_tumor.gatk_jar": "/nobackup/lab_bsf/users/berguener/bin/gatk-4.2.0.0/gatk-package-4.2.0.0-local.jar",
+	
+	"mutect2_multiple_tumor.annotate_vcf_vep.vep_executable": "vep",
+	"mutect2_multiple_tumor.annotate_vcf_vep.dir_cache": "/nobackup/lab_bsf/resources/VEP",
+	"mutect2_multiple_tumor.annotate_vcf_vep.dir_plugins": "/nobackup/lab_bsf/resources/VEP/Plugins_103",
+	"mutect2_multiple_tumor.annotate_vcf_vep.CADD_SNVs": "/nobackup/lab_bsf/resources/CADD/hg38/1.6/whole_genome_SNVs.tsv.gz",
+	"mutect2_multiple_tumor.annotate_vcf_vep.CADD_indels": "/nobackup/lab_bsf/resources/CADD/hg38/1.6/gnomad.genomes.r3.0.indel.tsv.gz",
+	"mutect2_multiple_tumor.annotate_vcf_vep.vcf_clinvar": "/nobackup/lab_bsf/resources/ClinVar/hg38/clinvar_20210213.vcf.gz",
+	"mutect2_multiple_tumor.annotate_vcf_vep.fasta": "/nobackup/lab_bsf/resources/VEP/homo_sapiens_merged/103_GRCh38/Homo_sapiens.GRCh38.dna.toplevel.fa.gz",
+	"mutect2_multiple_tumor.annotate_vcf_vep.assembly": "GRCh38",
+	"mutect2_multiple_tumor.annotate_vcf_vep.rt_image": "/nobackup/lab_bsf/users/berguener/singularity/ensembl-vep_release_103.0.sif",
 	
 	"mutect2_multiple_tumor.cpus":8,
 	"mutect2_multiple_tumor.memory":32000,

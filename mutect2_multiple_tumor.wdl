@@ -1,4 +1,5 @@
 version 1.0
+import "variant_calling.wdl" as variant_calling
 
 workflow mutect2_multiple_tumor {
     input {
@@ -62,6 +63,13 @@ workflow mutect2_multiple_tumor {
             rt_image = rt_image,
             rt_additional_parameters = rt_additional_parameters
     }
+
+    call variant_calling.annotate_vcf_vep {
+        input:
+            input_vcf = mutect2.output_vcf,
+            input_vcf_tbi = mutect2.output_vcf_idx,
+            output_vcf_dir = "~{root_dir}/mutect2"
+    }
 }
 
 task mutect2 {
@@ -97,10 +105,6 @@ task mutect2 {
     }
 
     String output_dir = "~{root_dir}/mutect2/~{patient_name}"
-    String output_vcf = "~{root_dir}/mutect2/~{patient_name}.vcf.gz"
-    String output_vcf_idx = "~{root_dir}/mutect2/~{patient_name}.vcf.gz.tbi"
-
-    String output_stats = output_vcf + ".stats"
 
     String normal_input = if defined(normal_sample) then "-I ~{root_dir}/bam/~{normal_sample}.bam -normal ~{normal_sample}" else ""
 
@@ -123,13 +127,18 @@ task mutect2 {
         TUMOR_INPUT=""
         for i in "${TUMOR_LIST[@]}"; do TUMOR_INPUT="${TUMOR_INPUT} -I ~{root_dir}/bam/${i}.bam" ; done
 
+        NORMAL_INPUT=""
+        if [[ ! -z "~{normal_sample}" ]]; then
+            NORMAL_INPUT="-I ~{root_dir}/bam/~{normal_sample}.bam -normal ~{normal_sample}" ;
+        fi
+
         for interval_file in ~{output_dir}/*.interval_list; do
             BN=$(basename $interval_file);
             interval_name=${BN/.interval_list/};
             echo -e "gatk --java-options \"-Xmx3g -Xms128m -Djava.io.tmpdir:~{output_dir} -d64\" Mutect2 \
                 -R ~{ref_fasta} \
                 $TUMOR_INPUT \
-                ~{normal_input} \
+                $NORMAL_INPUT \
                 ~{"--germline-resource " + gnomad} \
                 ~{"-pon " + pon} \
                 ~{"--alleles " + gga_vcf} \
@@ -261,7 +270,7 @@ task mutect2 {
             -stats ~{output_dir}/~{patient_name}.merged.stats \
             --filtering-stats ~{output_dir}/~{patient_name}.filtering.stats
             > ~{output_dir}/~{patient_name}.filtering.log 2>&1;
-        
+
         ## Clean up
         rm ~{output_dir}/*-scattered*
     >>>
