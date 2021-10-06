@@ -1,0 +1,26 @@
+{
+	"mutect2_multiple_tumor.patient_name":"CLL194",
+	"mutect2_multiple_tumor.root_dir":"/nobackup/lab_bsf/users/berguener/junk/BSA_0000_test_variant_calling/hg38",
+	"mutect2_multiple_tumor.calling_intervals":"/research/lab_bsf/resources/intervals/CEMM_Heme_v4_Agilent_20180719_targets_padding15_liftOver_hg38.interval_list",
+	"mutect2_multiple_tumor.interval_padding":100,
+	"mutect2_multiple_tumor.ref_fasta":"/nobackup/lab_bsf/resources/GATK/hg38/v0/Homo_sapiens_assembly38.fasta",
+	"mutect2_multiple_tumor.ref_fai":"/nobackup/lab_bsf/resources/GATK/hg38/v0/Homo_sapiens_assembly38.fasta.fai",
+	"mutect2_multiple_tumor.ref_dict":"/nobackup/lab_bsf/resources/GATK/hg38/v0/Homo_sapiens_assembly38.dict",
+	"mutect2_multiple_tumor.tumor_samples":"S66716,S66723,S66731,S66739",
+	"mutect2_multiple_tumor.normal_sample":"NIST",
+	
+	"mutect2_multiple_tumor.variants_for_contamination":"/nobackup/lab_bsf/resources/GATK/hg38/gatk-best-practices/somatic-hg38/small_exac_common_3.hg38.vcf.gz",
+	"mutect2_multiple_tumor.variants_for_contamination_idx":"/nobackup/lab_bsf/resources/GATK/hg38/gatk-best-practices/somatic-hg38/small_exac_common_3.hg38.vcf.gz.tbi",
+	"mutect2_multiple_tumor.gnomad":"/nobackup/lab_bsf/resources/GATK/hg38/gatk-best-practices/somatic-hg38/af-only-gnomad.hg38.vcf.gz",
+	"mutect2_multiple_tumor.gnomad_idx":"/nobackup/lab_bsf/resources/GATK/hg38/gatk-best-practices/somatic-hg38/af-only-gnomad.hg38.vcf.gz.tbi",
+	"mutect2_multiple_tumor.pon": "/research/lab_bsf/resources/wgs_panel_of_normal_hg38.vcf.gz",
+	"mutect2_multiple_tumor.pon_idx": "/research/lab_bsf/resources/wgs_panel_of_normal_hg38.vcf.gz.tbi",
+	"mutect2_multiple_tumor.gatk_jar": "/nobackup/lab_bsf/users/berguener/bin/gatk-4.2.0.0/gatk-package-4.2.0.0-local.jar",
+	
+	"mutect2_multiple_tumor.cpus":8,
+	"mutect2_multiple_tumor.memory":32000,
+	"mutect2_multiple_tumor.partition":"shortq",
+	"mutect2_multiple_tumor.time":"12:00:00",
+	"mutect2_multiple_tumor.rt_image":"/nobackup/lab_bsf/users/berguener/singularity/bsf_variant_calling_0.3.sif",
+	"mutect2_multiple_tumor.rt_additional_parameters":"-x b001,b006,b007,b011,b0[13-18]"
+}

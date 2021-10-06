@@ -58,11 +58,14 @@ if __name__ == '__main__':
     # Create the output folders
     project_path = config['project_path']
     output_path = os.path.join(project_path, config['genome_version'])
+    raw_data_path = os.path.join(project_path, config['genome_version'], 'raw')
     json_path = os.path.join(project_path, 'config_files')
     if not os.path.exists(project_path):
         os.mkdir(project_path)
     if not os.path.exists(output_path):
         os.mkdir(output_path)
+    if not os.path.exists(raw_data_path):
+        os.mkdir(raw_data_path)
     if not os.path.exists(json_path):
         os.mkdir(json_path)
 
@@ -135,6 +138,10 @@ if __name__ == '__main__':
                     if os.path.exists(source):
                         source_stats = os.stat(source)
                         raw_size_mb += int(source_stats.st_size / (1024 * 1024))
+                    source_basename = os.path.basename(source)
+                    relative_path = os.path.relpath(source, raw_data_path)
+                    if not os.path.islink(os.path.join(raw_data_path, source_basename)):
+                        os.symlink(relative_path, os.path.join(raw_data_path, source_basename))
                 else:
                     print('WARNING: Could not locate {} for sample {}'.format(source, sample))
         # Skip the sample in case the input files weren't located
