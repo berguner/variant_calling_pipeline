@@ -22,7 +22,7 @@ for i in "DART_PROJECT_NAME" "DART_USER" "DART_PWD" "DART_GRP"; do
   fi
 done
 
-#Type can be GERMLINE (cohort load) ,SOMATIC (multiple file load), SINGLE_FILE.
+#Type can be GERMLINE (cohort load), SOMATIC (multiple file load), SINGLE_FILE.
 project_type="GERMLINE"
 project_name="$DART_PROJECT_NAME"
 

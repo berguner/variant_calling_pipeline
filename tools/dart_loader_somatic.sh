@@ -23,7 +23,8 @@ for i in "DART_PROJECT_NAME" "DART_USER" "DART_PWD" "DART_GRP"; do
 done
 
 #Type can be GERMLINE (cohort load), SOMATIC (multiple file load), SINGLE_FILE.
-project_type="GERMLINE"
+sample_name=$1
+uid=$2
 project_name="$DART_PROJECT_NAME"
 
 #User setup
@@ -31,9 +32,25 @@ username="$DART_USER"
 password="$DART_PWD"
 usergroup="$DART_GRP"
 
+# Fix the header of the VCF file, this is necessary because AS_FilterStatus and AS_SB_TABLE have wrong number values.
+VCF_FILE="${BSF_PROJECTS}/${DART_PROJECT_NAME}/hg38/mutect2/${sample_name}.vep.vcf.gz"
+bcftools view ${VCF_FILE} | sed 's/##INFO=<ID=AS_FilterStatus,Number=A/##INFO=<ID=AS_FilterStatus,Number=./' | sed  's/##INFO=<ID=AS_SB_TABLE,Number=1/##INFO=<ID=AS_SB_TABLE,Number=./' | bcftools view -O z -o ${VCF_FILE/.vep.vcf.gz/.tmp.vep.vcf.gz} -
+bcftools index -t ${VCF_FILE/.vep.vcf.gz/.tmp.vep.vcf.gz}
+[ ! -d "${BSF_PROJECTS}/${DART_PROJECT_NAME}/hg38/mutect2/broken_header" ] && mkdir "${BSF_PROJECTS}/${DART_PROJECT_NAME}/hg38/mutect2/broken_header"
+mv "${BSF_PROJECTS}/${DART_PROJECT_NAME}/hg38/mutect2/${sample_name}.vep.vcf.gz" "${BSF_PROJECTS}/${DART_PROJECT_NAME}/hg38/mutect2/${sample_name}.vep.vcf.gz.tbi" "${BSF_PROJECTS}/${DART_PROJECT_NAME}/hg38/mutect2/broken_header"
+mv ${VCF_FILE/.vep.vcf.gz/.tmp.vep.vcf.gz} ${VCF_FILE}
+mv ${VCF_FILE/.vep.vcf.gz/.tmp.vep.vcf.gz.tbi} "${VCF_FILE}.tbi"
+
 #Server setup
 dart_server="pub-dart.int.cemm.at:8080"
-config_file="${HOME}/src/bsfconfiguration/variant_calling/${DART_PROJECT_NAME}_variant_calling_DART_config.tsv"
+config_file="${BSF_PROJECTS}/${DART_PROJECT_NAME}/hg38/mutect2/${sample_name}.DART_config.tsv"
+echo -e "SAMPLE\tSAMPLE_ALIAS\tINCLUDE\tVCF_URL\tBAM_URL\tCOVERAGE_TRACK_URL\tCOVERAGE_FILE" > ${config_file}
+VCF_URL="https://biomedical-sequencing.at/projects/${DART_PROJECT_NAME}_${uid}/hg38/mutect2/${sample_name}.vep.vcf.gz"
+BAM_URL="https://biomedical-sequencing.at/projects/${DART_PROJECT_NAME}_${uid}/hg38/bam/${sample_name}.bam"
+COVERAGE_TRACK_URL="https://biomedical-sequencing.at/projects/${DART_PROJECT_NAME}_${uid}/hg38/bam/${sample_name}_callable_loci.bb"
+COVERAGE_FILE="${BSF_PROJECTS}/${DART_PROJECT_NAME}/hg38/bam/${sample_name}_non_callable_regions.tsv"
+echo -e "${sample_name}\t${sample_name}\tTRUE\t${VCF_URL}\t${BAM_URL}\t${COVERAGE_TRACK_URL}\t${COVERAGE_FILE}" >> ${config_file}
+
 chromosomes="chr1,chr2,chr3,chr4,chr5,chr6,chr7,chr8,chr9,chr10,chr11,chr12,chr13,chr14,chr15,chr16,chr17,chr18,chr19,chr20,chr21,chr22,chrX,chrY,chrM"
 
 #Environment setup
@@ -47,8 +64,8 @@ resource_path="/nobackup/lab_bsf/projects/${DART_PROJECT_NAME}/hg38/"
 
 #-------------------------------------------------------------------------------
 
-vcf_type="GERMLINE"
-file="/nobackup/lab_bsf/projects/${DART_PROJECT_NAME}/hg38/vcf/${project_name}_cohort.vep.vcf.gz"
+vcf_type="SOMATIC"
+file=${VCF_FILE}
 
 #-------------------------------------------------------------------------------
 
