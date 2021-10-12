@@ -1,9 +1,9 @@
 #!/bin/bash
-#SBATCH --partition=shortq
-#SBATCH --qos=shortq
-#SBATCH --ntasks=1
-#SBATCH --mem=8000
-#SBATCH --time=12:00:00
+#SBATCH --partition=mediumq
+#SBATCH --qos=mediumq
+#SBATCH -c 2
+#SBATCH --mem=16000
+#SBATCH --time=2-00:00:00
 
 module unload java
 module load Java/1.8
@@ -31,7 +31,7 @@ java -Djava.io.tmpdir=$JAVATMP -Xmx3G \
 
 bedSort ${SAMPLE_NAME}_callable_loci.bed  ${SAMPLE_NAME}_callable_sorted.bed
 
-bedToBigBed -type=bed4 ${SAMPLE_NAME}_callable_sorted.bed $REF_FASTA.fai ${SAMPLE_NAME}_callable_loci.bb
+bedToBigBed -type=bed4 ${SAMPLE_NAME}_callable_sorted.bed ${REF_FASTA}.fai ${SAMPLE_NAME}_callable_loci.bb
 
 ~/src/variant_calling_pipeline/tools/bsf_variant_calling_coverage.R --callable-loci ${SAMPLE_NAME}_callable_loci.bed \
 	--exon-flanks 15 \
