@@ -2,10 +2,11 @@
 
 ## 1. Introduction
 
-This repository contains the code and configurations required to run the genomic SNV/indel detection pipeline which is developed at the Biomedical Sequencing Facility @ CeMM.
-The pipeline can process whole genome, whole exome and hybrid captured panel data.
+This repository contains the code and configurations required to run the genomic SNV/indel detection pipeline.
+The pipeline is developed by the [Biomedical Sequencing Facility](https://www.biomedical-sequencing.org/) at [CeMM](https://cemm.at/) 
+in order to process whole genome, whole exome and hybrid captured panel data.
 The pipeline takes unaligned BAM files as raw sequnece data and generates germline and/or somatic variant calls.
-[BWA-MEM](https://github.com/lh3/bwa) is used for alignment,
+In summary, [BWA-MEM](https://github.com/lh3/bwa) is used for alignment,
 [GATK4](https://gatk.broadinstitute.org/hc/en-us) HaplotypeCaller is used for germline variant calling and
 [GATK4](https://gatk.broadinstitute.org/hc/en-us) Mutect2 is used for somatic variant calling.
 Detected variants are annotated using [Ensembl VEP](https://www.ensembl.org/info/docs/tools/vep/index.html) and stored in VCF format.
@@ -25,10 +26,12 @@ Finally, a [MultiQC](https://multiqc.info/) report can be generated that contain
 
 ### 2.2. Installation
 - Clone this repository
-- Install the included MultiQC plugin:
-
+- Install the required software and/or pull the docker image:
+`docker pull berguner/bsf_variant_calling:0.3`
+- Install the custom MultiQC plugin:
 `python3 /path/to/multiqc_variant_calling/setup.py install`
 - Collect the necessary reference files listed in the pipeline configuration file `variant_calling_config_hg38.yaml` and update the paths in this file.
+Most of the files are from [GATK Resource Bundle](https://gatk.broadinstitute.org/hc/en-us/articles/360035890811-Resource-bundle).
 
 ## 3. Using the Pipeline
 
