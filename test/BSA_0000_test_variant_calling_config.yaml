@@ -16,6 +16,8 @@ config_file: null
 custom_logo: '/home/berguener/src/variant_calling_pipeline/multiqc_variant_calling/BSF_logo.png'
 custom_logo_url: 'https://www.biomedical-sequencing.org/'
 custom_logo_title: 'Biomedical Sequencing Facility'
+exploratory_columns: ['library', 'patient', 'sample_type']
+include_sex: "yes"
 picard_config:
     general_stats_target_coverage:
         - 1
