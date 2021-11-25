@@ -1,4 +1,0 @@
-#!/usr/bin/env bash
-
-perl /scratch/lab_bsf/modules/applications/ensembl/100/ensembl-vep/vep --allele_number --allow_non_variant --assembly GRCh38 --cache --dir_cache /scratch/lab_bsf/resources/VEP --offline --dir_plugins /scratch/lab_bsf/modules/applications/ensembl/100/VEP_plugins --dont_skip --everything --failed 1 --fasta /scratch/lab_bsf/resources/VEP/homo_sapiens_merged/100_GRCh38/Homo_sapiens.GRCh38.dna.toplevel.fa.gz --pick_allele --force_overwrite --format vcf --gencode_basic --hgvsg --hgvs --exclude_predicted --species homo_sapiens --tmpdir ./ --vcf --compress_output bgzip --fork 4 --input_file ${1}.vcf.gz --output_file ${1}.vep.vcf.gz --custom /scratch/lab_bsf/resources/COSMIC/hg38/CosmicCodingMuts.vcf.gz,COSMIC,vcf,exact,0,CNT,SNP,GENOMIC_ID,LEGACY_ID --custom /scratch/lab_bsf/resources/COSMIC/hg38/CosmicNonCodingVariants.vcf.gz,COSMIC,vcf,exact,0,CNT,SNP,GENOMIC_ID,LEGACY_ID
-bcftools index -t ${1}.vep.vcf.gz 
