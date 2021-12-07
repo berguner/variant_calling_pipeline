@@ -12,8 +12,8 @@
 
 PROJECT_PATH=$1
 SAMPLE_NAME=$2
-CNVKIT_SIF="/nobackup/lab_bsf/users/berguener/singularity/cnvkit_0.9.8.sif"
-BIOCONDUCTOR_SIF="/nobackup/lab_bsf/users/berguener/singularity/bsf_bioconductor_3.12.sif"
+CNVKIT_SIF="/nobackup/lab_bsf/applications/singularity/cnvkit_0.9.8.sif"
+BIOCONDUCTOR_SIF="/nobackup/lab_bsf/applications/singularity/bsf_bioconductor_3.12.sif"
 PURECN=`singularity exec -e --bind /nobackup:/nobackup $BIOCONDUCTOR_SIF Rscript -e 'cat(system.file("extdata", package="PureCN"))'`
 
 date

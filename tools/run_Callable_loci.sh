@@ -8,7 +8,7 @@
 module unload java
 module load Java/1.8
 
-JAVATMP="/nobackup/lab_bsf/users/berguener/tmpdir/"
+JAVATMP=${TMP}
 SAMPLE_NAME=$1
 SAMPLE_BAM="$SAMPLE_NAME.bam"
 INTERVAL_LIST="/research/lab_bsf/resources/intervals/Ensembl_e99_Twist_RefSeq_exome_targets_hg38.interval_list"
