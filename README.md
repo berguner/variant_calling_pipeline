@@ -49,7 +49,8 @@ singularity exec -e --bind /nobackup:/nobackup \
   INSTALL.pl \
   --AUTO cfp \
   --CACHEDIR /nobackup/lab_bsf/resources/VEP/ \
-  --PLUGINS /nobackup/lab_bsf/resources/VEP/Plugins_103 \
+  --PLUGINS all \
+  --PLUGINSDIR /nobackup/lab_bsf/resources/VEP/Plugins_103 \
   --SPECIES homo_sapiens \
   --ASSEMBLY GRCh38
 ```
